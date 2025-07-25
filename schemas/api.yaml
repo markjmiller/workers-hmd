@@ -1,0 +1,354 @@
+openapi: 3.0.3
+info:
+  title: Workers HMD API
+  description: API for managing Health Mediated Deployments for Cloudflare Workers
+  version: 1.0.0
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: "https://workers-hmd.{cloudflare-workers-subdomain}.workers.dev/api"
+    variables:
+      cloudflare-workers-subdomain:
+        default: replace-me
+
+security:
+  - BasicAuth: []
+
+paths:
+  /plan:
+    get:
+      summary: Get deployment plan
+      description: Retrieve the current deployment plan with stages and SLOs
+      operationId: getPlan
+      tags:
+        - Plan
+      responses:
+        200:
+          description: Plan retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        404:
+          description: Plan not found
+    post:
+      summary: Update deployment plan
+      description: Create or update the deployment plan configuration
+      operationId: updatePlan
+      tags:
+        - Plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Plan"
+      responses:
+        200:
+          description: Plan updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        400:
+          description: Plan is invalid
+  /release:
+    get:
+      summary: List releases
+      description: Get a list of all releases including current and completed ones
+      operationId: listReleases
+      tags:
+        - Release
+      responses:
+        200:
+          description: List of releases retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Release"
+        404:
+          description: No releases found
+    post:
+      summary: Create release
+      description: Create a new release. Only one release can be staged at a time
+      operationId: createRelease
+      tags:
+        - Release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Release"
+      responses:
+        200:
+          description: Release created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        409:
+          description: A release is already staged
+        400:
+          description: Release cannot be created from the plan
+  /release/{releaseId}:
+    get:
+      summary: Get release details
+      description: Retrieve release state, plan record, and stage information
+      operationId: getRelease
+      tags:
+        - Release
+      parameters:
+        - $ref: "#/components/parameters/releaseId"
+      responses:
+        200:
+          description: Release details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        404:
+          description: Release not found
+    post:
+      summary: Control release execution
+      description: Start or abort a release. Only one release can be active at a time
+      operationId: controlRelease
+      tags:
+        - Release
+      parameters:
+        - $ref: "#/components/parameters/releaseId"
+      requestBody:
+        required: true
+        content:
+          application/text:
+            schema:
+              type: string
+              enum:
+                - start
+                - abort
+      responses:
+        200:
+          description: start or stop was successful
+        404:
+          description: Release not found
+        400:
+          description: The provided command is not valid for the release in its current state
+    delete:
+      summary: Delete release
+      description: Delete a release that is in 'not_started' state
+      operationId: deleteRelease
+      tags:
+        - Release
+      parameters:
+        - $ref: "#/components/parameters/releaseId"
+      responses:
+        200:
+          description: Release deleted
+        409:
+          description: Release has to be in a "not_started" state
+        404:
+          description: Release not found
+  /release/{releaseId}/stage/{releaseStageId}:
+    get:
+      summary: Get release stage status
+      description: Get the current state of a specific stage within a release
+      operationId: getReleaseStage
+      tags:
+        - Release
+      parameters:
+        - $ref: "#/components/parameters/releaseId"
+        - $ref: "#/components/parameters/releaseStageId"
+      responses:
+        200:
+          description: Returns the Stage info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStage"
+        404:
+          description: Stage not found
+    post:
+      summary: Progress release stage
+      description: Advance a stage if it is in the 'awaiting_approval' state
+      operationId: progressReleaseStage
+      tags:
+        - Release
+      parameters:
+        - $ref: "#/components/parameters/releaseId"
+        - $ref: "#/components/parameters/releaseStageId"
+      requestBody:
+        required: true
+        content:
+          application/text:
+            schema:
+              type: string
+              enum:
+                - approve
+                - deny
+      responses:
+        200:
+          description: Successfully progressed the stage
+        409:
+          description: Stage has to be in a "awaiting_approval" state
+        404:
+          description: Stage not found
+
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+  parameters:
+    releaseStageId:
+      name: releaseStageId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{32}$'
+        example: '0fcdec2eb49045cc8b481c15e0f1277c'
+    releaseId:
+      name: releaseId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{32}$'
+        example: '0fcdec2eb49045cc8b481c15e0f1277c'
+
+  schemas:
+    PlanStage:
+      type: object
+      example:
+        order: 0
+        target_percent: 25
+        soak_time: 10
+        auto_progress: true
+      required:
+        - order
+        - target_percent
+        - soak_time
+        - auto_progress
+      properties:
+        order:
+          description: order of the stage in the plan
+          type: integer
+        description:
+          type: string
+        target_percent:
+          description: target percentage of traffic that goes to the new Worker version
+          type: integer
+        soak_time:
+          description: soak time in seconds
+          type: integer
+        auto_progress:
+          description: whether the stage automatically progresses or if it needs a human to manually progress it
+          type: boolean
+    ReleaseStage:
+      type: object
+      example:
+        id: "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
+        order: 0
+        state: "queued"
+        time_started: "2023-01-01T00:00:00Z"
+        time_elapsed: 0
+      required:
+        - id
+        - order
+        - state
+        - time_started
+        - time_elapsed
+      properties:
+        id:
+          type: string
+        order:
+          description: order of the stage in the release
+          type: integer
+        state:
+          type: string
+          enum:
+            - queued
+            - awaiting_approval
+            - running
+            - failed
+            - successful
+        time_started:
+          type: string
+          format: date-time
+        time_elapsed:
+          type: integer
+    Release:
+      type: object
+      example:
+        id: "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
+        state: "not_started"
+        plan_record:
+          $ref: "#/components/schemas/Plan"
+        stages:
+          - $ref: "#/components/schemas/ReleaseStage"
+        time_started:
+          type: string
+          format: date-time
+        time_elapsed:
+          type: integer
+      required:
+        - id
+        - state
+        - plan_record
+        - stages
+        - time_started
+        - time_elapsed
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum:
+            - not_started
+            - running
+            - aborted_manually
+            - aborted_failed_slo
+            - successful
+        plan_record:
+          $ref: "#/components/schemas/Plan"
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReleaseStage"
+        time_started:
+          type: string
+          format: date-time
+        time_elapsed:
+          type: integer
+    Plan:
+      type: object
+      example:
+        stages:
+          - $ref: "#/components/schemas/PlanStage"
+        slos:
+          - $ref: "#/components/schemas/SLO"
+      required:
+        - stages
+        - slos
+      properties:
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanStage"
+        slos:
+          type: array
+          items:
+            $ref: "#/components/schemas/SLO"
+    SLO:
+      type: object
+      example:
+        value: "latency p99 100"
+      required:
+        - value
+      properties:
+        value:
+          type: string

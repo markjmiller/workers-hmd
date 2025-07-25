@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "workers-hmd",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-07-24",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./public/",
+    "run_worker_first": true,
+    "binding": "ASSETS",
+  },
+}
