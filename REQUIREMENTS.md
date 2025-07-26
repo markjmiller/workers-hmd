@@ -7,6 +7,7 @@ Users can create a release plan. In the release plan…
     * 99.9% of requests are not 5xx status codes during `soak_time`
     * SLIs such as request latency or number of 5xx status codes is sourced from Workers Observability
 - Users can define any number of release stages in a release plan
+- Users can drag and drop stages to reorder them
 - For MVP, there’s only one release plan
 
 ## Release Stages
