@@ -4,7 +4,6 @@ import { validator } from "hono/validator";
 import type { components } from "../../types/api";
 import { PlanStorage } from "./plan";
 import { ReleaseHistory } from "./releaseHistory";
-import { timeout } from "hono/timeout";
 
 type Plan = components["schemas"]["Plan"];
 type Release = components["schemas"]["Release"];

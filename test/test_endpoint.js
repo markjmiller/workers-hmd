@@ -59,7 +59,7 @@ async function testPlanEndpoint() {
 }
 
 async function testGetReleaseEndpoint() {
-  const url = `${BASE_URL}/release?limit=2&offset=0`;
+  const url = `${BASE_URL}/release?limit=1&offset=0`;
 
   try {
     console.log('=== Testing GET /api/release ===');

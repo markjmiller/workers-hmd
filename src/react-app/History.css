@@ -2,6 +2,94 @@
 
 .history-container {
   padding: 1em;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Date Range Search Styles */
+.date-search-container {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1em;
+  margin-bottom: 1.5em;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1em;
+  flex-wrap: wrap;
+}
+
+.date-search-inputs {
+  display: flex;
+  gap: 1em;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.date-input-group label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #495057;
+}
+
+.date-input {
+  padding: 0.5em;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+  min-width: 140px;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.date-search-buttons {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-end;
+}
+
+.search-btn {
+  background-color: #007bff;
+  color: white;
+}
+
+.search-btn:hover {
+  background-color: #0056b3;
+}
+
+.clear-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.clear-btn:hover {
+  background-color: #545b62;
+}
+
+@media (max-width: 768px) {
+  .date-search-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .date-search-inputs {
+    justify-content: center;
+  }
+  
+  .date-search-buttons {
+    justify-content: center;
+  }
 }
 
 .history-loading {
@@ -40,8 +128,17 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding-bottom: 0.75em;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 1em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.history-header-right {
+  display: flex;
+  align-items: flex-start;
+  gap: 1em;
 }
 
 .history-info {
@@ -71,8 +168,28 @@
 .history-timestamps {
   display: flex;
   flex-direction: column;
-  gap: 0.25em;
   align-items: flex-end;
+  gap: 0.25em;
+}
+
+.expand-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0.25em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  color: #666;
+  transition: color 0.2s ease;
+}
+
+.expand-toggle-btn:hover {
+  color: #333;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
 }
 
 .history-timestamp {

@@ -15,12 +15,15 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [hasMoreResults, setHasMoreResults] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
 
   useEffect(() => {
     fetchReleaseHistory(true);
   }, []);
 
-  const fetchReleaseHistory = async (resetPage = false, pageNum?: number) => {
+  const fetchReleaseHistory = async (resetPage = false, pageNum?: number, overrideFromDate?: string, overrideToDate?: string) => {
     try {
       const targetPage = resetPage ? 0 : (pageNum !== undefined ? pageNum : currentPage);
       const isInitialLoad = resetPage || targetPage === 0;
@@ -30,13 +33,27 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         setLoadingMore(true);
       }
       
-      const offset = resetPage ? 0 : targetPage * 10;
+      const offset = resetPage ? 0 : targetPage * 5;
       const queryParams = new URLSearchParams({
-        limit: '11', // Fetch 11 to check if there are more results
+        limit: '6', // Fetch 6 to check if there are more results
         offset: offset.toString(),
         // Only show completed releases by filtering out active states
         // Note: We'll filter these on the client side since the API doesn't support NOT operators
       });
+      
+      // Add date range parameters if specified (use override values if provided)
+      const effectiveFromDate = overrideFromDate !== undefined ? overrideFromDate : fromDate;
+      const effectiveToDate = overrideToDate !== undefined ? overrideToDate : toDate;
+      
+      if (effectiveFromDate) {
+        queryParams.set('since', new Date(effectiveFromDate).toISOString());
+      }
+      if (effectiveToDate) {
+        // Set end of day for 'until' parameter
+        const endOfDay = new Date(effectiveToDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        queryParams.set('until', endOfDay.toISOString());
+      }
       
       const response = await fetch(`/api/release?${queryParams}`);
       
@@ -47,13 +64,17 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
           release.state !== "not_started" && release.state !== "running"
         );
         
-        // Check if there are more results (we fetched 11, so if we have 11+ completed releases, there are more)
-        const hasMore = completedReleases.length > 10;
-        const displayReleases = completedReleases.slice(0, 10);
+        // Check if there are more results (we fetched 6, so if we have 6+ completed releases, there are more)
+        const hasMore = completedReleases.length > 5;
+        const displayReleases = completedReleases.slice(0, 5);
         
         if (resetPage) {
           setReleases(displayReleases);
           setCurrentPage(0);
+          // Expand first release by default
+          if (displayReleases.length > 0) {
+            setExpandedReleases(new Set([displayReleases[0].id]));
+          }
         } else {
           setReleases(prev => [...prev, ...displayReleases]);
           if (pageNum !== undefined) {
@@ -106,8 +127,31 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
     }
   };
 
+  const toggleReleaseExpanded = (releaseId: string) => {
+    setExpandedReleases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(releaseId)) {
+        newSet.delete(releaseId);
+      } else {
+        newSet.add(releaseId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSearch = () => {
+    fetchReleaseHistory(true);
+  };
+
+  const handleClearSearch = () => {
+    setFromDate('');
+    setToDate('');
+    // Pass empty strings directly to avoid async state update issues
+    fetchReleaseHistory(true, undefined, '', '');
+  };
+
   const loadMore = async () => {
-    if (!hasMoreResults || loadingMore) return;
+    //if (!hasMoreResults || loadingMore) return;
     
     const nextPage = currentPage + 1;
     await fetchReleaseHistory(false, nextPage);
@@ -127,112 +171,156 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="history-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading release history...</p>
-      </div>
-    );
-  }
-
-  if (releases.length === 0) {
-    return (
-      <div className="history-empty">
-        <h3>No Release History</h3>
-        <p>No completed releases found.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="history-container">
-      <div className="history-list">
-        {releases.map((release) => (
-          <div key={release.id} className="history-item">
-            <div className="history-header">
-              <div className="history-info">
-                <span 
-                  className="history-state"
-                  style={{ backgroundColor: getStateColor(release.state) }}
-                >
-                  {getStateDisplayName(release.state)}
-                </span>
-                <span className="history-id">ID: {release.id}</span>
-                {release.time_elapsed !== undefined && (
-                  <div style={{ display: 'flex', gap: '0.5em', alignItems: 'baseline' }}>
-                    <span className='stat-label'>Duration:</span>
-                    <span className="stat-value">{formatDuration(release.time_elapsed)}</span>
-                  </div>
-                )}
-              </div>
-              <div className="history-timestamps">
-                {release.time_created && (
-                  <span className="history-timestamp">
-                    Created: {new Date(release.time_created).toLocaleString()}
-                  </span>
-                )}
-                {release.time_started && (
-                  <span className="history-timestamp">
-                    Started: {new Date(release.time_started).toLocaleString()}
-                  </span>
-                )}
-                {release.time_done && (
-                  <span className="history-timestamp">
-                    Completed: {new Date(release.time_done).toLocaleString()}
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="history-details">
-              <div className="history-slos">
-                <h4>SLOs</h4>
-                <div className="slos-grid">
-                  {release.plan_record.slos.map((slo, index) => (
-                    <div key={index} className="slo-item">
-                      {slo.value}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="history-stages">
-                <h4>Stages</h4>
-                <div className="stages-grid">
-                  {release.plan_record.stages.map((planStage) => (
-                    <StageItem
-                      key={planStage.order}
-                      planStage={planStage}
-                      showStatus={false}
-                      showSoakTime={true}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+      {/* Date Range Search - Always visible */}
+      <div className="date-search-container">
+        <div className="date-search-inputs">
+          <div className="date-input-group">
+            <label htmlFor="from-date">From:</label>
+            <input
+              id="from-date"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="date-input"
+            />
           </div>
-        ))}
+          <div className="date-input-group">
+            <label htmlFor="to-date">To:</label>
+            <input
+              id="to-date"
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="date-input"
+            />
+          </div>
+        </div>
+        <div className="date-search-buttons">
+          <button onClick={handleSearch} className="nice-button search-btn">
+            Search
+          </button>
+          <button onClick={handleClearSearch} className="nice-button clear-btn">
+            Clear
+          </button>
+        </div>
       </div>
       
-      {/* Pagination Controls */}
-      {(hasMoreResults || loadingMore) && (
-        <div className="pagination-controls">
-          {loadingMore ? (
-            <div className="loading-more">
-              <span>Loading more releases...</span>
-            </div>
-          ) : (
-            <button 
-              onClick={loadMore} 
-              className="nice-button"
-              disabled={!hasMoreResults}
-            >
-              Load More Releases
-            </button>
-          )}
+      {/* Loading State */}
+      {loading && (
+        <div className="history-loading">
+          <div className="loading-spinner"></div>
+          <p>Loading release history...</p>
         </div>
       )}
+      
+      {/* Empty State */}
+      {!loading && releases.length === 0 && (
+        <div className="history-empty">
+          <p>No completed releases found{(fromDate || toDate) ? ' for the selected date range' : ''}.</p>
+        </div>
+      )}
+      
+      {/* Release List */}
+      {!loading && releases.length > 0 && (
+        <>
+          <div className="history-list">
+            {releases.map((release) => {
+              const isExpanded = expandedReleases.has(release.id);
+              return (
+                <div key={release.id} className="history-item">
+                  <div className="history-header" onClick={() => toggleReleaseExpanded(release.id)}>
+                    <div className="history-info">
+                      <span 
+                        className="history-state"
+                        style={{ backgroundColor: getStateColor(release.state) }}
+                      >
+                        {getStateDisplayName(release.state)}
+                      </span>
+                      <span className="history-id">ID: {release.id}</span>
+                      {release.time_elapsed !== undefined && (
+                        <div style={{ display: 'flex', gap: '0.5em', alignItems: 'baseline' }}>
+                          <span className='stat-label'>Duration:</span>
+                          <span className="stat-value">{formatDuration(release.time_elapsed)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="history-header-right">
+                      <div className="history-timestamps">
+                        {release.time_created && (
+                          <span className="history-timestamp">
+                            Created: {new Date(release.time_created).toLocaleString()}
+                          </span>
+                        )}
+                        {release.time_started && (
+                          <span className="history-timestamp">
+                            Started: {new Date(release.time_started).toLocaleString()}
+                          </span>
+                        )}
+                        {release.time_done && (
+                          <span className="history-timestamp">
+                            Completed: {new Date(release.time_done).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <button className="expand-toggle-btn">
+                        {isExpanded ? '▼' : '▶'}
+                      </button>
+                    </div>
+                  </div>
+                
+                  {isExpanded && (
+                    <div className="history-details">
+                      <div className="history-slos">
+                        <h4>SLOs</h4>
+                        <div className="slos-grid">
+                          {release.plan_record.slos.map((slo, index) => (
+                            <div key={index} className="slo-item">
+                              {slo.value}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="history-stages">
+                        <h4>Stages</h4>
+                        <div className="stages-grid">
+                          {release.plan_record.stages.map((planStage) => (
+                            <StageItem
+                              key={planStage.order}
+                              planStage={planStage}
+                              showStatus={false}
+                              showSoakTime={true}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Pagination Controls */}
+          <div className="pagination-controls">
+            {loadingMore ? (
+              <div className="loading-more">
+                <span>Loading more...</span>
+              </div>
+            ) : (
+              <button 
+                onClick={loadMore} 
+                className="nice-button"
+              >
+                Load More
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      
     </div>
   );
 };
