@@ -25,16 +25,18 @@
   text-align: left;
 }
 
+.button-container-left {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.5em;
+}
+
 .slos-section {
   margin-bottom: 2em;
 }
 
-.slos-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1em;
-}
-
+/* Consolidated container classes */
+.slos-container,
 .slo-entry-container {
   display: flex;
   flex-direction: column;
@@ -46,6 +48,38 @@
   align-items: flex-start;
   gap: 0.75em;
   transition: all 0.15s ease;
+}
+
+.percent-input,
+.soak-input,
+.description-input {
+  padding: 0.5em 0.25em;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.25em;
+  font-size: 0.875em;
+  background-color: #ffffff;
+  color: #212121;
+  transition: all 0.15s ease;
+}
+
+.percent-input,
+.soak-input {
+  width: 4em;
+  text-align: center;
+}
+
+.description-input {
+  width: 100%;
+  padding: 0.75em 0.5em;
+}
+
+.percent-input:focus,
+.soak-input:focus,
+.description-input:focus {
+  border-color: #1976d2;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(25,118,210,0.12);
+  background-color: #ffffff;
 }
 
 .slo-textarea {
@@ -117,30 +151,7 @@
   transform: none;
 }
 
-.add-slo-button {
-  background-color: #1976d2;
-  color: #ffffff;
-  border: none;
-  padding: 0.75em 1.5em;
-  border-radius: 0.375em;
-  cursor: pointer;
-  font-size: 0.875em;
-  font-weight: 500;
-  font-family: 'Roboto', sans-serif;
-  transition: all 0.15s ease;
-  align-self: flex-start;
-  margin-top: 0.5em;
-}
-
-.add-slo-button:hover {
-  background-color: #1565c0;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-.add-slo-button:active {
-  background-color: #0d47a1;
-  transform: translateY(1px);
-}
+/* Removed .add-slo-button - consolidated into .nice-button */
 
 /* Tab Interface Styles */
 .tab-container {
@@ -315,25 +326,22 @@
 }
 
 .col-percent,
-.col-soak {
+.col-soak,
+.col-auto,
+.col-description,
+.col-actions {
   display: flex;
   align-items: center;
+}
+
+.col-percent,
+.col-soak {
   gap: 0.5em;
 }
 
-.percent-input,
-.soak-input {
-  width: 4em;
-  padding: 0.5em 0.25em;
-  border: 1px solid #e0e0e0;
-  border-radius: 0.25em;
-  font-size: 0.875em;
-  text-align: center;
-  background-color: #ffffff;
-  color: #212121;
-  font-weight: 400;
-  font-family: 'Roboto', sans-serif;
-  transition: all 0.15s ease;
+.col-auto,
+.col-actions {
+  justify-content: center;
 }
 
 .percent-input.error {
@@ -362,13 +370,7 @@
   font-weight: 400;
 }
 
-.percent-input:focus,
-.soak-input:focus {
-  border-color: #1976d2;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(25,118,210,0.12);
-  background-color: #ffffff;
-}
+/* Removed duplicate focus styles - already handled in consolidated section */
 
 .percent-input.locked {
   background-color: #f5f5f5;
@@ -411,23 +413,7 @@
   align-items: center;
 }
 
-.description-input {
-  width: 100%;
-  padding: 0.75em 0.5em;
-  border: 1px solid #e0e0e0;
-  border-radius: 0.25em;
-  font-size: 0.875em;
-  background-color: #ffffff;
-  color: #212121;
-  transition: all 0.15s ease;
-}
-
-.description-input:focus {
-  border-color: #1976d2;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(25,118,210,0.12);
-  background-color: #ffffff;
-}
+/* Consolidated with other input styles above */
 
 .col-actions {
   display: flex;
@@ -463,13 +449,6 @@
   transform: translateY(1px);
 }
 
-.save-button-container {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1em;
-  align-items: stretch;
-}
-
 .save-validation-error {
   display: flex;
   align-items: center;
@@ -502,8 +481,7 @@
   font-size: 0.875em;
   color: #2e7d32;
   font-weight: 500;
-  padding-left: 0.75em;
-  padding-right: 0.75em;
+  padding: 0.5em;
   gap: 0.3125em;
 }
 
@@ -524,27 +502,7 @@
   margin-top: 1.25em;
 }
 
-.add-stage-button {
-  background-color: #1976d2;
-  color: #ffffff;
-  border: none;
-  padding: 0.75em 1.5em;
-  border-radius: 0.375em;
-  cursor: pointer;
-  font-size: 0.875em;
-  font-weight: 500;
-  font-family: 'Roboto', sans-serif;
-  transition: all 0.15s ease;
-  align-self: flex-start;
-  margin-top: 0.5em;
-}
-
-.add-stage-button:hover {
-  background-color: #1565c0;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-.save-button {
+.nice-button {
   background-color: #1976d2;
   color: #ffffff;
   border: none;
@@ -558,13 +516,13 @@
   align-self: flex-start;
 }
 
-.save-button:hover:not(.disabled) {
+.nice-button:hover:not(.disabled) {
   background-color: #1565c0;
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
-.save-button.disabled,
-.save-button:disabled {
+.nice-button.disabled,
+.nice-button:disabled {
   background-color: #e0e0e0 !important;
   color: #9e9e9e !important;
   cursor: not-allowed !important;
@@ -572,8 +530,8 @@
   opacity: 0.6;
 }
 
-.save-button.disabled:hover,
-.save-button:disabled:hover {
+.nice-button.disabled:hover,
+.nice-button:disabled:hover {
   background-color: #e0e0e0 !important;
   color: #9e9e9e !important;
   box-shadow: none !important;
@@ -582,33 +540,6 @@
 .section-heading {
   text-align: left;
   margin: 0 0 1em 0;
-}
-
-.button-container-left {
-  text-align: left;
-  margin-top: 0.75em;
-}
-
-.save-button-container {
-  text-align: right;
-}
-
-.add-slo-button {
-  background-color: #1976d2;
-  color: #ffffff;
-  border: none;
-  padding: 0.75em 1.5em;
-  border-radius: 0.375em;
-  cursor: pointer;
-  font-size: 0.875em;
-  font-weight: 500;
-  font-family: 'Roboto', sans-serif;
-  transition: all 0.15s ease;
-}
-
-.add-slo-button:hover {
-  background-color: #1565c0;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 /* SLO Input Container */
@@ -626,6 +557,34 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* JSON Display Styles */
+.release-plan-json {
+  margin-top: 1em;
+}
+
+.json-display {
+  text-align: left;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.375em;
+  padding: 1em;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8125em;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 32em;
+  overflow-y: auto;
+  color: #212529;
+  white-space: pre;
+}
+
+.json-display code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
 }
 
 /* SLO Textarea Error State */

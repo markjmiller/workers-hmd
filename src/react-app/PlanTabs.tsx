@@ -18,6 +18,7 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
   const [activeTab, setActiveTab] = useState<'plan' | 'release' | 'history'>('plan');
   const [saveValidationError, setSaveValidationError] = useState<string>('');
   const [hasValidationErrors, setHasValidationErrors] = useState<boolean>(false);
+  const [showJsonView, setShowJsonView] = useState<boolean>(false);
   const getCurrentPlanRef = React.useRef<(() => Plan) | null>(null);
 
   const handleSave = () => {
@@ -79,12 +80,13 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
               initialPlan={initialPlan}
               onGetCurrentPlan={handleGetCurrentPlan}
               onValidationChange={handleValidationChange}
+              showJsonView={showJsonView}
             />
 
             <hr style={{ marginTop: '16px', marginBottom: '16px' }}/>
             
-            {onSave && (
-              <div className="save-button-container">
+            <div style={{ display: 'flex', gap: '1em', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: '1em', justifyContent: 'flex-start' }}>
                 {saveSuccess && (
                   <div className="save-success">
                     <span className="success-icon">✅</span>
@@ -97,15 +99,25 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
                     <span className="error-message">{saveValidationError}</span>
                   </div>
                 )}
+              </div>
+              <div style={{ display: 'flex', gap: '1em', justifyContent: 'flex-end', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5em', fontSize: '0.875em' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={showJsonView}
+                    onChange={(e) => setShowJsonView(e.target.checked)}
+                  />
+                  Show JSON
+                </label>
                 <button
                   onClick={handleSave}
-                  className="save-button"
+                  className="nice-button"
                   disabled={!!saveValidationError || hasValidationErrors}
                 >
-                  Save Plan
+                Save Plan
                 </button>
               </div>
-            )}
+            </div>
           </>
         );
       case 'release':

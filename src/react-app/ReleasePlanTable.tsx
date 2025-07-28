@@ -29,12 +29,14 @@ interface ReleasePlanTableProps {
   initialPlan: Plan;
   onGetCurrentPlan?: (getCurrentPlan: () => Plan) => void;
   onValidationChange?: (hasErrors: boolean) => void;
+  showJsonView?: boolean;
 }
 
 export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
   initialPlan,
   onGetCurrentPlan,
   onValidationChange,
+  showJsonView = false,
 }) => {
   const [stages, setStages] = useState<PlanStage[]>(
     initialPlan.stages
@@ -42,6 +44,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
   const [slos, setSlos] = useState<SLO[]>(initialPlan.slos);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [sloValidationErrors, setSloValidationErrors] = useState<Record<number, string>>({});
+  const [jsonRepresentation, setJsonRepresentation] = useState<string>('');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -270,108 +273,125 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     }
   }, [getCurrentPlan, onGetCurrentPlan]);
 
+  // Update JSON representation whenever stages or slos change
+  React.useEffect(() => {
+    const currentPlan = getCurrentPlan();
+    setJsonRepresentation(JSON.stringify(currentPlan, null, 2));
+  }, [stages, slos, getCurrentPlan]);
+
   return (
-    <div className="release-plan-content">
-      <div className="slos-section">
-        <h3 className="section-heading">SLOs</h3>
-        <div className="slo-entry-container">
-        {slos.map((slo, index) => (
-          <div key={index} className="slo-entry">
-            <div className="slo-input-container">
-              <div className="slo-textarea-container">
-                <textarea
-                  value={slo.value}
-                  onChange={(e) => updateSlo(index, e.target.value)}
-                  placeholder="latency p999 < 100ms, 5xx error rate < 0.1%, etc..."
-                  className={`slo-textarea ${sloValidationErrors[index] ? 'error' : ''}`}
-                  rows={3}
-                />
-                {sloValidationErrors[index] && (
-                  <div className="validation-error">
-                    <span className="error-icon">⚠️</span>
-                    <span className="error-message">{sloValidationErrors[index]}</span>
-                  </div>
-                )}
+    <div>
+      {!showJsonView ? (
+        <div className="release-plan-form">
+        <div className="slos-section">
+          <h3 className="section-heading">SLOs</h3>
+          <div className="slo-entry-container">
+          {slos.map((slo, index) => (
+            <div key={index} className="slo-entry">
+              <div className="slo-input-container">
+                <div className="slo-textarea-container">
+                  <textarea
+                    value={slo.value}
+                    onChange={(e) => updateSlo(index, e.target.value)}
+                    placeholder="latency p999 < 100ms, 5xx error rate < 0.1%, etc..."
+                    className={`slo-textarea ${sloValidationErrors[index] ? 'error' : ''}`}
+                    rows={3}
+                  />
+                  {sloValidationErrors[index] && (
+                    <div className="validation-error">
+                      <span className="error-icon">⚠️</span>
+                      <span className="error-message">{sloValidationErrors[index]}</span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeSlo(index)}
+                  className={`slo-remove-button ${slos.length <= 1 ? 'disabled' : ''}`}
+                  title={slos.length <= 1 ? 'Cannot remove last SLO' : 'Remove SLO'}
+                  disabled={slos.length <= 1}
+                >
+                  🗑️
+                </button>
               </div>
-              <button
-                onClick={() => removeSlo(index)}
-                className={`slo-remove-button ${slos.length <= 1 ? 'disabled' : ''}`}
-                title={slos.length <= 1 ? 'Cannot remove last SLO' : 'Remove SLO'}
-                disabled={slos.length <= 1}
-              >
-                🗑️
-              </button>
             </div>
+          ))}
           </div>
-        ))}
-        </div>
-        <div className="button-container-left">
-          <button
-            onClick={addSlo}
-            className="add-slo-button"
-          >
-            + Add SLO
-          </button>
-        </div>
-      </div>
-
-      <div className="stages-section">
-        <h3 className="section-heading">Stages</h3>
-        <div className="table-container">
-          <div className="table-header">
-            <div className="col-order">Order</div>
-            <div className="col-percent">Target %</div>
-            <div className="col-soak">Soak Time</div>
-            <div className="col-auto">Auto Progress</div>
-            <div className="col-description">Description</div>
-            <div className="col-actions"></div>
-          </div>
-
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-            modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
-          >
-            <SortableContext
-              items={stages.filter(stage => {
-                const maxOrder = Math.max(...stages.map(s => s.order));
-                return stage.order !== maxOrder; // Exclude last stage from draggable items
-              }).map(stage => stage.order)}
-              strategy={verticalListSortingStrategy}
-            >
-              {stages
-                .sort((a, b) => a.order - b.order)
-                .map((stage) => {
-                  const maxOrder = Math.max(...stages.map(s => s.order));
-                  const isLastStage = stage.order === maxOrder;
-                  return (
-                    <SortableStageRow
-                      key={stage.order}
-                      stage={stage}
-                      onUpdate={updateStage}
-                      onRemove={removeStage}
-                      isLastStage={isLastStage}
-                      validationError={validationErrors[stage.order]}
-                      soakValidationError={validationErrors[`${stage.order}_soak`]}
-                    />
-                  );
-                })}
-            </SortableContext>
-          </DndContext>
-        </div>
-
-        <div className="action-buttons">
           <div className="button-container-left">
             <button
-              onClick={addStage}
-              className="add-stage-button"
+              onClick={addSlo}
+              className="nice-button"
             >
-              + Add Stage
+              + Add SLO
             </button>
           </div>
         </div>
+
+        <div className="stages-section">
+          <h3 className="section-heading">Stages</h3>
+          <div className="table-container">
+            <div className="table-header">
+              <div className="col-order">Order</div>
+              <div className="col-percent">Target %</div>
+              <div className="col-soak">Soak Time</div>
+              <div className="col-auto">Auto Progress</div>
+              <div className="col-description">Description</div>
+              <div className="col-actions"></div>
+            </div>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+              modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+            >
+              <SortableContext
+                items={stages.filter(stage => {
+                  const maxOrder = Math.max(...stages.map(s => s.order));
+                  return stage.order !== maxOrder; // Exclude last stage from draggable items
+                }).map(stage => stage.order)}
+                strategy={verticalListSortingStrategy}
+              >
+                {stages
+                  .sort((a, b) => a.order - b.order)
+                  .map((stage) => {
+                    const maxOrder = Math.max(...stages.map(s => s.order));
+                    const isLastStage = stage.order === maxOrder;
+                    return (
+                      <SortableStageRow
+                        key={stage.order}
+                        stage={stage}
+                        onUpdate={updateStage}
+                        onRemove={removeStage}
+                        isLastStage={isLastStage}
+                        validationError={validationErrors[stage.order]}
+                        soakValidationError={validationErrors[`${stage.order}_soak`]}
+                      />
+                    );
+                  })}
+              </SortableContext>
+            </DndContext>
+          </div>
+
+          <div className="action-buttons">
+            <div className="button-container-left">
+              <button
+                onClick={addStage}
+                className="nice-button"
+              >
+                + Add Stage
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+      ) : (
+        <div className="release-plan-json">
+          <h3 className="section-heading">Plan JSON Representation</h3>
+          <pre className="json-display">
+            <code>{jsonRepresentation}</code>
+          </pre>
+        </div>
+      )}
     </div>
   );
 };
