@@ -51,7 +51,6 @@
 }
 
 .percent-input,
-.soak-input,
 .description-input {
   padding: 0.5em 0.25em;
   border: 1px solid #e0e0e0;
@@ -60,6 +59,10 @@
   background-color: #ffffff;
   color: #212121;
   transition: all 0.15s ease;
+}
+
+.soak-input {
+  font-size: 0.875em;
 }
 
 .percent-input,
@@ -200,6 +203,39 @@
   background-color: #e3f2fd;
 }
 
+.tab-button:disabled,
+.tab-button.disabled {
+  background-color: #f5f5f5;
+  color: #bdbdbd;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tab-button:disabled:hover,
+.tab-button.disabled:hover {
+  background-color: #f5f5f5;
+  color: #bdbdbd;
+}
+
+.tab-status-icon-not_started {
+  margin-left: 0.5em;
+  font-size: 0.75em;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+.tab-status-icon-running {
+  margin-left: 0.5em;
+  font-size: 0.75em;
+  display: inline-block;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
 .tab-content-wrapper {
   padding: 1.5em;
   min-height: 25em;
@@ -242,7 +278,7 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 6.25em 7.5em 8.75em 7.5em 1fr 5em;
+  grid-template-columns: 100px 120px 140px 120px 1fr 80px;
   background-color: #f5f5f5;
   font-weight: 500;
   padding: 1em 0.75em;
@@ -253,7 +289,7 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 6.25em 7.5em 8.75em 7.5em 1fr 5em;
+  grid-template-columns: 100px 120px 140px 120px 1fr 80px;
   padding: 1em 0.75em;
   border-bottom: 1px solid #e0e0e0;
   background-color: #ffffff;
@@ -646,3 +682,5 @@
     font-size: 1em;
   }
 }
+
+

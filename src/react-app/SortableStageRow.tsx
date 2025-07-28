@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TimeInput } from './TimeInput';
 import { PlanStage } from './types';
 
 interface SortableStageRowProps {
@@ -59,6 +60,10 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
     handleInputChange('description', e.target.value);
   };
 
+  const handleSoakTimeChange = (seconds: number) => {
+    onUpdate(stage.order, { soak_time: seconds });
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -100,14 +105,13 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
       
       <div className="col-soak">
         <div className="input-container">
-          <input
-            type="number"
-            min="1"
+          <TimeInput
             value={stage.soak_time}
-            onChange={(e) => onUpdate(stage.order, { soak_time: Number(e.target.value) })}
-            className={`soak-input ${soakValidationError ? 'error' : ''}`}
+            onChange={handleSoakTimeChange}
+            className="soak-input"
+            error={!!soakValidationError}
+            min={1}
           />
-          <span>sec</span>
           {soakValidationError && (
             <div className="validation-error">
               {soakValidationError}

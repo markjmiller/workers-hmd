@@ -9,7 +9,7 @@
   },
   "migrations": [
     {
-      "new_sqlite_classes": ["PlanStorage"],
+      "new_sqlite_classes": ["PlanStorage", "ReleaseHistory"],
       "tag": "v1",
     }
   ],
@@ -18,6 +18,10 @@
       {
         "name": "PLAN_STORAGE",
         "class_name": "PlanStorage"
+      },
+      {
+        "name": "RELEASE_HISTORY",
+        "class_name": "ReleaseHistory"
       }
     ]
   },

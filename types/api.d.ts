@@ -52,6 +52,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/release/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get active release
+         * @description Retrieve the active release
+         */
+        get: operations["getActiveRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/release/{releaseId}": {
         parameters: {
             query?: never;
@@ -67,7 +87,7 @@ export interface paths {
         put?: never;
         /**
          * Control release execution
-         * @description Start or abort a release. Only one release can be active at a time
+         * @description Start or stop a release. Only one release can be active at a time
          */
         post: operations["controlRelease"];
         /**
@@ -137,10 +157,11 @@ export interface components {
             /** @description order of the stage in the release */
             order: number;
             /** @enum {string} */
-            state: "queued" | "awaiting_approval" | "running" | "failed" | "successful";
+            state: "queued" | "awaiting_approval" | "running" | "done_failed" | "done_successful";
             /** Format: date-time */
             time_started: string;
             time_elapsed: number;
+            logs: string;
         };
         /** @example {
          *       "id": "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5",
@@ -159,17 +180,25 @@ export interface components {
          *       },
          *       "time_elapsed": {
          *         "type": "integer"
+         *       },
+         *       "time_done": {
+         *         "type": "string",
+         *         "format": "date-time"
          *       }
          *     } */
         Release: {
             id: string;
             /** @enum {string} */
-            state: "not_started" | "running" | "aborted_manually" | "aborted_failed_slo" | "successful";
+            state: "not_started" | "running" | "done_stopped_manually" | "done_failed_slo" | "done_successful";
             plan_record: components["schemas"]["Plan"];
             stages: components["schemas"]["ReleaseStage"][];
             /** Format: date-time */
+            time_created: string;
+            /** Format: date-time */
             time_started: string;
             time_elapsed: number;
+            /** Format: date-time */
+            time_done: string;
         };
         /** @example {
          *       "stages": [
@@ -186,6 +215,8 @@ export interface components {
         Plan: {
             stages: components["schemas"]["PlanStage"][];
             slos: components["schemas"]["SLO"][];
+            /** Format: date-time */
+            readonly time_last_saved?: string;
         };
         /** @example {
          *       "value": "latency p99 100"
@@ -297,11 +328,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Release"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Release created successfully */
             200: {
@@ -321,6 +348,33 @@ export interface operations {
             };
             /** @description A release is already staged */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getActiveRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active release retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description No active release found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -368,7 +422,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/text": "start" | "abort";
+                "application/text": "start" | "stop";
             };
         };
         responses: {

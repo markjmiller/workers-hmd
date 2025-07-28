@@ -1,0 +1,276 @@
+/* Release Component Styles */
+.release-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 20em;
+  gap: 1em;
+  color: #666;
+}
+
+.release-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 25em;
+}
+
+.create-release-container {
+  text-align: center;
+  max-width: 30em;
+  padding: 2em;
+  border: 2px dashed #e0e0e0;
+  border-radius: 0.5em;
+  background-color: #fafafa;
+}
+
+.create-release-container h3 {
+  margin-bottom: 0.5em;
+  color: #424242;
+  font-size: 1.25em;
+}
+
+.create-release-container p {
+  margin-bottom: 1.5em;
+  color: #666;
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+
+.create-release-button {
+  margin-top: 0.5em;
+  padding: 0.875em 2em;
+  font-size: 1em;
+}
+
+.release-active {
+  padding: 1em 0;
+}
+
+.release-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+}
+
+.release-info {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+}
+
+.release-id {
+  font-size: 0.875em;
+  color: #666;
+  font-family: monospace;
+}
+
+.release-timestamp {
+  margin-top: 0.5em;
+}
+
+.timestamp-info {
+  color: #666;
+  font-size: 0.75em;
+  font-family: 'Roboto Mono', monospace;
+  display: block;
+  margin-bottom: 0.25em;
+  padding: 0em 0.25em;
+}
+
+.running-timestamps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.running-timestamps .timestamp-info {
+  margin-bottom: 0;
+}
+
+.release-state {
+  padding: 0.25em 0.75em;
+  border-radius: 1em;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.release-state.not_started {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.release-state.running {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.release-state.completed {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.release-state.failed {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.release-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2em;
+}
+
+.release-stages h4,
+.release-slos h4 {
+  margin: 0 0 1em 0;
+  color: #424242;
+  font-size: 1em;
+  font-weight: 500;
+}
+
+.stages-list,
+.slos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+
+.release-stage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75em;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.375em;
+}
+
+.stage-info {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+  flex: 1;
+}
+
+.stage-number {
+  font-weight: 600;
+  color: #212121;
+  min-width: 4em;
+}
+
+.stage-target {
+  font-weight: 500;
+  color: #1976d2;
+  min-width: 3em;
+}
+
+.stage-description {
+  color: #666;
+  font-size: 0.875em;
+}
+
+.stage-status {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.stage-state {
+  padding: 0.25em 0.5em;
+  border-radius: 0.25em;
+  font-size: 0.75em;
+  font-weight: 500;
+}
+
+.stage-state.queued {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.stage-state.running {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.stage-state.completed {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.stage-state.failed {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.stage-time {
+  font-size: 0.75em;
+  color: #666;
+  font-family: monospace;
+}
+
+.slo-item {
+  padding: 0.75em;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.375em;
+}
+
+.slo-value {
+  font-family: monospace;
+  font-size: 0.875em;
+  color: #212121;
+}
+
+.delete-release-button {
+  background-color: #d32f2f;
+  color: white;
+}
+
+.delete-release-button:hover:not(:disabled) {
+  background-color: #c62828;
+}
+
+.delete-release-button:disabled {
+  background-color: #ffcdd2;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.stop-release-button {
+  background-color: #d32f2f;
+  color: white;
+}
+
+.stop-release-button:hover:not(:disabled) {
+  background-color: #c62828;
+}
+
+.stop-release-button:disabled {
+  background-color: #ffcdd2;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  .release-details {
+    grid-template-columns: 1fr;
+    gap: 1.5em;
+  }
+  
+  .release-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5em;
+  }
+  
+  .stage-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25em;
+  }
+}

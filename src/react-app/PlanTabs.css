@@ -1,0 +1,51 @@
+/* PlanTabs Component Styles */
+
+.plan-tabs-separator {
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+}
+
+.plan-tabs-bottom-container {
+  display: flex;
+  gap: 1em;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.plan-tabs-bottom-left {
+  display: flex;
+  gap: 1em;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.plan-tabs-bottom-right {
+  display: flex;
+  gap: 1em;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.plan-tabs-json-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.875em;
+}
+
+.plan-tabs-time-saved {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 0.875em;
+  color: #666;
+  font-family: monospace;
+  margin-top: 0.5em;
+}
+
+.plan-tabs-status-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.1em;
+}

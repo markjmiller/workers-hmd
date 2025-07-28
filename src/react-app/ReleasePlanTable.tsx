@@ -386,7 +386,6 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
       </div>
       ) : (
         <div className="release-plan-json">
-          <h3 className="section-heading">Plan JSON Representation</h3>
           <pre className="json-display">
             <code>{jsonRepresentation}</code>
           </pre>

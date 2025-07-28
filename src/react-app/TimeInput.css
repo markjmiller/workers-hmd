@@ -1,0 +1,85 @@
+/* TimeInput Component Styles */
+
+.time-input-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.time-input-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.25em;
+  padding: 0.25em 0.5em;
+  background-color: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.time-input-fields:focus-within {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25,118,210,0.12);
+}
+
+.time-input-container.error .time-input-fields {
+  border-color: #f44336;
+  background-color: #ffebee;
+}
+
+.time-input-container.error .time-input-fields:focus-within {
+  border-color: #f44336;
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.12);
+}
+
+.time-input-field {
+  border: none;
+  outline: none;
+  background: transparent;
+  text-align: center;
+  font-size: 0.875em;
+  font-family: 'Roboto', sans-serif;
+  color: #212121;
+  padding: 0.25em 0;
+  min-width: 0;
+}
+
+.time-input-field.hours {
+  width: 2em;
+}
+
+.time-input-field.minutes,
+.time-input-field.seconds {
+  width: 2.5em;
+}
+
+.time-input-field:focus {
+  background-color: rgba(25,118,210,0.05);
+  border-radius: 0.125em;
+}
+
+.time-separator {
+  color: #666;
+  font-weight: 500;
+  font-size: 0.875em;
+  user-select: none;
+}
+
+.time-input-label {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Remove number input spinner arrows */
+.time-input-field::-webkit-outer-spin-button,
+.time-input-field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.time-input-field[type=number] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}

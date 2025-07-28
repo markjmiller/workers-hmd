@@ -3,6 +3,8 @@ import { prettyJSON } from "hono/pretty-json";
 import { validator } from "hono/validator";
 import type { components } from "../../types/api";
 import { PlanStorage } from "./plan";
+import { ReleaseHistory } from "./releaseHistory";
+import { timeout } from "hono/timeout";
 
 type Plan = components["schemas"]["Plan"];
 type Release = components["schemas"]["Release"];
@@ -15,6 +17,7 @@ function isValidId(value: string): boolean {
 declare module "hono" {
   interface ContextVariableMap {
     plan: DurableObjectStub<PlanStorage>;
+    releaseHistory: DurableObjectStub<ReleaseHistory>;
   }
 }
 
@@ -59,65 +62,69 @@ api.post("/plan", validator("json", (value, c) => {
 
 api.get("/release", async (c) => {
   try {
-    // TODO: Implement actual data retrieval
-    const mockReleases: Release[] = [
-      {
-        id: "a1b2c3d4",
-        state: "not_started",
-        plan_record: {
-          stages: [
-            {
-              order: 0,
-              target_percent: 25,
-              soak_time: 10,
-              auto_progress: true,
-            },
-          ],
-          slos: [
-            { value: "latency p99 100" },
-          ],
-        },
-        stages: [
-          {
-            id: "b2a2c3d4",
-            order: 0,
-            state: "queued",
-            time_started: "2023-01-01T00:00:00Z",
-            time_elapsed: 0,
-          },
-        ],
-        time_started: "2023-01-01T00:00:00Z",
-        time_elapsed: 0,
-      },
-    ];
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releases = await releaseHistory.getAllReleases();
     
-    return c.json(mockReleases, 200);
+    return c.json(releases, 200);
   } catch (error) {
     console.error("Error getting releases:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
 
-api.post("/release", validator("json", (value, c) => {
-  const release = value as Release;
-  if (!release.id || !release.plan_record) {
-    return c.json({ message: "Invalid release: must include id and plan_record", ok: false }, 400);
-  }
-  return release;
-}), async (c) => {
+api.post("/release", async (c) => {
   try {
-    const release = c.req.valid("json");
-    // TODO: Implement actual release creation
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
     
-    // Check if there's already a staged release
-    const alreadyStaged = false; // TODO: Implement actual check
-    if (alreadyStaged) {
+    // Check if there's already an active release
+    const hasActiveRelease = await releaseHistory.hasActiveRelease();
+    if (hasActiveRelease) {
       return c.json({ message: "A release is already staged", ok: false }, 409);
     }
     
-    return c.json(release, 200);
+    // Create release from current plan
+    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan("main");
+    const releaseId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
+    const currentTime = new Date().toISOString();
+    
+    const newRelease: Release = {
+      id: releaseId,
+      state: "not_started",
+      plan_record: plan,
+      stages: plan.stages.map((stage) => ({
+        id: `stage-${releaseId}-${stage.order}`,
+        order: stage.order,
+        state: "queued",
+        time_started: "",
+        time_elapsed: 0,
+        logs: "",
+      })),
+      time_created: currentTime,
+      time_started: "",
+      time_elapsed: 0,
+      time_done: "",
+    };
+    
+    const createdRelease = await releaseHistory.createRelease(newRelease);
+    return c.json(createdRelease, 200);
   } catch (error) {
     console.error("Error creating release:", error);
+    return c.json({ message: "Internal Server Error", ok: false }, 500);
+  }
+});
+
+api.get("/release/active", async (c) => {
+  try {
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const activeRelease = await releaseHistory.getActiveRelease();
+    
+    if (!activeRelease) {
+      return c.json({ message: "No active release found", ok: false }, 404);
+    }
+    
+    return c.json(activeRelease, 200);
+  } catch (error) {
+    console.error("Error getting active release:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
@@ -129,37 +136,14 @@ api.get("/release/:releaseId", async (c) => {
       return c.json({ message: "Release not found", ok: false }, 404);
     }
     
-    // TODO: Implement actual data retrieval
-    const mockRelease: Release = {
-      id: releaseId,
-      state: "not_started",
-      plan_record: {
-        stages: [
-          {
-            order: 0,
-            target_percent: 25,
-            soak_time: 10,
-            auto_progress: true,
-          },
-        ],
-        slos: [
-          { value: "latency p99 100" },
-        ],
-      },
-      stages: [
-        {
-          id: "b2a2c3d4",
-          order: 0,
-          state: "queued",
-          time_started: "2023-01-01T00:00:00Z",
-          time_elapsed: 0,
-        },
-      ],
-      time_started: "2023-01-01T00:00:00Z",
-      time_elapsed: 0,
-    };
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const release = await releaseHistory.getRelease(releaseId);
     
-    return c.json(mockRelease, 200);
+    if (!release) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
+    
+    return c.json(release, 200);
   } catch (error) {
     console.error("Error getting release:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
@@ -176,13 +160,56 @@ api.post("/release/:releaseId", async (c) => {
     // According to the OpenAPI spec, the content type should be application/text
     const command = await c.req.text();
     
-    if (command !== "start" && command !== "abort") {
-      return c.json({ message: "Invalid command: must be 'start' or 'abort'", ok: false }, 400);
+    if (command !== "start" && command !== "stop") {
+      return c.json({ message: "Invalid command: must be 'start' or 'stop'", ok: false }, 400);
     }
     
-    // TODO: Implement actual release control logic
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const release = await releaseHistory.getRelease(releaseId);
     
-    return c.text("Command executed successfully", 200);
+    if (!release) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
+
+    // Simulate a delay to see UI states
+    // TODO: don't forget to eventually remove this
+    await (function sleep(milliseconds) {
+      return new Promise(r=>setTimeout(r, milliseconds));
+    })(1000);
+    
+    if (command === "start") {
+      // Only allow starting if release is in not_started state
+      if (release.state !== "not_started") {
+        return c.json({ 
+          message: `Cannot start release in '${release.state}' state`, 
+          ok: false 
+        }, 400);
+      }
+      
+      // Update release state to running
+      const updated = await releaseHistory.updateReleaseState(releaseId, "running");
+      if (!updated) {
+        return c.json({ message: "Failed to update release state", ok: false }, 500);
+      }
+      
+      return c.text("Release started successfully", 200);
+    } else if (command === "stop") {
+      // Only allow stopping if release is in running state
+      if (release.state !== "running") {
+        return c.json({ 
+          message: `Cannot stop release in '${release.state}' state`, 
+          ok: false 
+        }, 400);
+      }
+      
+      // Update release state to done_stopped_manually
+      const updated = await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
+      if (!updated) {
+        return c.json({ message: "Failed to update release state", ok: false }, 500);
+      }
+      
+      return c.text("Release stopped successfully", 200);
+    }
   } catch (error) {
     console.error("Error controlling release:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
@@ -196,8 +223,27 @@ api.delete("/release/:releaseId", async (c) => {
       return c.json({ message: "Release not found", ok: false }, 404);
     }
     
-    // TODO: Implement actual release deletion logic
-    // For now, always succeed
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    
+    // Get the release to check its state
+    const release = await releaseHistory.getRelease(releaseId);
+    if (!release) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
+    
+    // According to OpenAPI spec, can only delete releases in "not_started" state
+    if (release.state !== "not_started") {
+      return c.json({ 
+        message: "Release has to be in a \"not_started\" state", 
+        ok: false 
+      }, 409);
+    }
+    
+    // Delete the release
+    const deleted = await releaseHistory.removeRelease(releaseId);
+    if (!deleted) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
     
     return c.text("Release deleted", 200);
   } catch (error) {
@@ -222,6 +268,7 @@ api.get("/release/:releaseId/stage/:releaseStageId", async (c) => {
       state: "queued",
       time_started: "2023-01-01T00:00:00Z",
       time_elapsed: 0,
+      logs: "",
     };
     
     return c.json(mockStage, 200);
@@ -257,5 +304,5 @@ api.post("/release/:releaseId/stage/:releaseStageId", async (c) => {
 
 app.route("/api", api);
 
-export { PlanStorage };
+export { PlanStorage, ReleaseHistory };
 export default app;

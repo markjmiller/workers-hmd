@@ -42,7 +42,7 @@ export class PlanStorage extends DurableObject<Env> {
   }
 
   async updatePlan(id: string, plan: Plan): Promise<Plan> {
-    await this.ctx.storage.put(id, plan);
+    await this.ctx.storage.put(id, {...plan, time_last_saved: new Date().toISOString()});
     return plan;
   }
 

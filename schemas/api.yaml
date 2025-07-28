@@ -78,12 +78,6 @@ paths:
       operationId: createRelease
       tags:
         - Release
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Release"
       responses:
         200:
           description: Release created successfully
@@ -95,6 +89,22 @@ paths:
           description: A release is already staged
         400:
           description: Release cannot be created from the plan
+  /release/active:
+    get:
+      summary: Get active release
+      description: Retrieve the active release
+      operationId: getActiveRelease
+      tags:
+        - Release
+      responses:
+        200:
+          description: Active release retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        404:
+          description: No active release found
   /release/{releaseId}:
     get:
       summary: Get release details
@@ -115,7 +125,7 @@ paths:
           description: Release not found
     post:
       summary: Control release execution
-      description: Start or abort a release. Only one release can be active at a time
+      description: Start or stop a release. Only one release can be active at a time
       operationId: controlRelease
       tags:
         - Release
@@ -129,7 +139,7 @@ paths:
               type: string
               enum:
                 - start
-                - abort
+                - stop
       responses:
         200:
           description: start or stop was successful
@@ -262,6 +272,7 @@ components:
         - state
         - time_started
         - time_elapsed
+        - logs
       properties:
         id:
           type: string
@@ -274,15 +285,18 @@ components:
             - queued
             - awaiting_approval
             - running
-            - failed
-            - successful
+            - done_failed
+            - done_successful
         time_started:
           type: string
           format: date-time
         time_elapsed:
           type: integer
+        logs:
+          type: string
     Release:
       type: object
+      readOnly: true
       example:
         id: "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
         state: "not_started"
@@ -295,13 +309,18 @@ components:
           format: date-time
         time_elapsed:
           type: integer
+        time_done:
+          type: string
+          format: date-time
       required:
         - id
         - state
         - plan_record
         - stages
+        - time_created
         - time_started
         - time_elapsed
+        - time_done
       properties:
         id:
           type: string
@@ -310,20 +329,26 @@ components:
           enum:
             - not_started
             - running
-            - aborted_manually
-            - aborted_failed_slo
-            - successful
+            - done_stopped_manually
+            - done_failed_slo
+            - done_successful
         plan_record:
           $ref: "#/components/schemas/Plan"
         stages:
           type: array
           items:
             $ref: "#/components/schemas/ReleaseStage"
+        time_created:
+          type: string
+          format: date-time
         time_started:
           type: string
           format: date-time
         time_elapsed:
           type: integer
+        time_done:
+          type: string
+          format: date-time
     Plan:
       type: object
       example:
@@ -343,6 +368,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SLO"
+        time_last_saved:
+          type: string
+          format: date-time
+          readOnly: true
     SLO:
       type: object
       example:

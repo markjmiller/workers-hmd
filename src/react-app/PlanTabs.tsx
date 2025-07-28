@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ReleasePlanTable } from './ReleasePlanTable';
+import { Release } from './Release';
+import './PlanTabs.css';
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
+type Release = components["schemas"]["Release"];
 
 interface PlanTabsProps {
   initialPlan: Plan;
@@ -16,10 +19,48 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
   saveSuccess = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'plan' | 'release' | 'history'>('plan');
+  const [hasActiveRelease, setHasActiveRelease] = useState<boolean>(false);
+  const [activeReleaseState, setActiveReleaseState] = useState<string | null>(null);
   const [saveValidationError, setSaveValidationError] = useState<string>('');
   const [hasValidationErrors, setHasValidationErrors] = useState<boolean>(false);
   const [showJsonView, setShowJsonView] = useState<boolean>(false);
   const getCurrentPlanRef = React.useRef<(() => Plan) | null>(null);
+
+  // Check for active release function
+  const checkActiveRelease = async () => {
+    try {
+      const response = await fetch('/api/release/active');
+      if (response.ok) {
+        const release = await response.json();
+        setHasActiveRelease(true);
+        setActiveReleaseState(release.state);
+        // Auto-open Release tab if there's an active release (only on initial load)
+        if (activeTab === 'plan') {
+          setActiveTab('release');
+        }
+      } else {
+        // No active release found
+        setHasActiveRelease(false);
+        setActiveReleaseState(null);
+      }
+    } catch (error) {
+      console.error('Error checking active release:', error);
+      setHasActiveRelease(false);
+      setActiveReleaseState(null);
+    }
+  };
+
+  // Check for active release on component mount and set up periodic polling
+  useEffect(() => {
+    // Initial check
+    checkActiveRelease();
+    
+    // Set up periodic polling every 5 seconds
+    const interval = setInterval(checkActiveRelease, 5000);
+    
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   const handleSave = () => {
     // Clear any previous validation errors
@@ -83,10 +124,10 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
               showJsonView={showJsonView}
             />
 
-            <hr style={{ marginTop: '16px', marginBottom: '16px' }}/>
+            <hr className="plan-tabs-separator"/>
             
-            <div style={{ display: 'flex', gap: '1em', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', gap: '1em', justifyContent: 'flex-start' }}>
+            <div className="plan-tabs-bottom-container">
+              <div className="plan-tabs-bottom-left">
                 {saveSuccess && (
                   <div className="save-success">
                     <span className="success-icon">✅</span>
@@ -100,8 +141,8 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '1em', justifyContent: 'flex-end', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5em', fontSize: '0.875em' }}>
+              <div className="plan-tabs-bottom-right">
+                <label className="plan-tabs-json-label">
                   <input 
                     type="checkbox" 
                     checked={showJsonView}
@@ -118,13 +159,20 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
                 </button>
               </div>
             </div>
+            {initialPlan.time_last_saved && (
+                  <div className="plan-tabs-time-saved">
+                    Last saved: {new Date(initialPlan.time_last_saved).toLocaleString()}
+                  </div>
+                )}
           </>
         );
       case 'release':
         return (
           <div className="tab-content">
-            <h3>Release Management</h3>
-            <p className="placeholder-text">Release controls and monitoring will be available here.</p>
+            <Release 
+              onError={(error) => setSaveValidationError(error)} 
+              onReleaseStateChange={checkActiveRelease}
+            />
           </div>
         );
       case 'history':
@@ -148,8 +196,10 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
       <div className="tab-container">
         <div className="tab-navigation">
           <button
-            className={`tab-button ${activeTab === 'plan' ? 'active' : ''}`}
+            className={`tab-button ${activeTab === 'plan' ? 'active' : ''} ${(activeReleaseState === 'not_started' || activeReleaseState === 'running') ? 'disabled' : ''}`}
             onClick={() => setActiveTab('plan')}
+            disabled={activeReleaseState === 'not_started' || activeReleaseState === 'running'}
+            title={activeReleaseState === 'not_started' || activeReleaseState === 'running' ? 'Plan cannot be modified while release is active' : ''}
           >
             Plan
           </button>
@@ -157,7 +207,14 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({
             className={`tab-button ${activeTab === 'release' ? 'active' : ''}`}
             onClick={() => setActiveTab('release')}
           >
-            Release
+            <div className="plan-tabs-status-container">
+              <span>Release</span>
+              {hasActiveRelease && (
+                <span className={`tab-status-icon-${activeReleaseState}`} title="Release staged">
+                  🟢
+                </span>
+            )}
+            </div>
           </button>
           <button
             className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
