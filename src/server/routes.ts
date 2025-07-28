@@ -62,10 +62,58 @@ api.post("/plan", validator("json", (value, c) => {
 
 api.get("/release", async (c) => {
   try {
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
-    const releases = await releaseHistory.getAllReleases();
+    // Parse query parameters
+    const limit = parseInt(c.req.query("limit") || "50");
+    const offset = parseInt(c.req.query("offset") || "0");
+    const since = c.req.query("since");
+    const until = c.req.query("until");
+    const state = c.req.query("state");
     
-    return c.json(releases, 200);
+    // Validate parameters
+    if (limit < 1 || limit > 100) {
+      return c.json({ message: "Limit must be between 1 and 100", ok: false }, 400);
+    }
+    if (offset < 0) {
+      return c.json({ message: "Offset must be non-negative", ok: false }, 400);
+    }
+    
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    let releases = await releaseHistory.getAllReleases();
+    
+    // Apply timestamp filters
+    if (since) {
+      const sinceDate = new Date(since);
+      if (isNaN(sinceDate.getTime())) {
+        return c.json({ message: "Invalid 'since' timestamp format", ok: false }, 400);
+      }
+      releases = releases.filter(release => 
+        new Date(release.time_created) >= sinceDate
+      );
+    }
+    
+    if (until) {
+      const untilDate = new Date(until);
+      if (isNaN(untilDate.getTime())) {
+        return c.json({ message: "Invalid 'until' timestamp format", ok: false }, 400);
+      }
+      releases = releases.filter(release => 
+        new Date(release.time_created) <= untilDate
+      );
+    }
+    
+    // Apply state filter
+    if (state) {
+      const validStates = ["not_started", "running", "done_successful", "done_stopped_manually", "done_failed_slo"];
+      if (!validStates.includes(state)) {
+        return c.json({ message: `Invalid state. Must be one of: ${validStates.join(", ")}`, ok: false }, 400);
+      }
+      releases = releases.filter(release => release.state === state);
+    }
+    
+    // Apply pagination
+    const paginatedReleases = releases.slice(offset, offset + limit);
+    
+    return c.json(paginatedReleases, 200);
   } catch (error) {
     console.error("Error getting releases:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
@@ -94,9 +142,10 @@ api.post("/release", async (c) => {
       stages: plan.stages.map((stage) => ({
         id: `stage-${releaseId}-${stage.order}`,
         order: stage.order,
-        state: "queued",
+        state: "queued" as const,
         time_started: "",
         time_elapsed: 0,
+        time_done: "",
         logs: "",
       })),
       time_created: currentTime,
@@ -261,17 +310,22 @@ api.get("/release/:releaseId/stage/:releaseStageId", async (c) => {
       return c.json({ message: "Release stage not found", ok: false }, 404);
     }
     
-    // TODO: Implement actual stage data retrieval
-    const mockStage: ReleaseStage = {
-      id: releaseStageId,
-      order: 0,
-      state: "queued",
-      time_started: "2023-01-01T00:00:00Z",
-      time_elapsed: 0,
-      logs: "",
-    };
+    // Get the release from storage
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const release = await releaseHistory.getRelease(releaseId);
     
-    return c.json(mockStage, 200);
+    if (!release) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
+    
+    // Find the specific stage within the release
+    const stage = release.stages.find(s => s.id === releaseStageId);
+    
+    if (!stage) {
+      return c.json({ message: "Release stage not found", ok: false }, 404);
+    }
+    
+    return c.json(stage, 200);
   } catch (error) {
     console.error("Error getting release stage:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);

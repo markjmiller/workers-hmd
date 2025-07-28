@@ -1,0 +1,220 @@
+/* History Component Styles */
+
+.history-container {
+  padding: 1em;
+}
+
+.history-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2em;
+  color: #666;
+}
+
+.history-empty {
+  text-align: center;
+  padding: 2em;
+  color: #666;
+}
+
+.history-empty h3 {
+  margin-bottom: 0.5em;
+  color: #333;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5em;
+}
+
+.history-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 0.5em;
+  padding: 1.5em;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 0.75em;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.history-state {
+  padding: 0.25em 0.75em;
+  border-radius: 1em;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  display: inline-block;
+  width: fit-content;
+}
+
+.history-id {
+  font-size: 0.75em;
+  color: #666;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.history-timestamps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  align-items: flex-end;
+}
+
+.history-timestamp {
+  font-size: 0.75em;
+  color: #666;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.history-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+.history-summary {
+  display: flex;
+  gap: 2em;
+  padding: 0.75em;
+  background-color: #f8f9fa;
+  border-radius: 0.25em;
+}
+
+.stat-label {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 0.875em;
+  color: #333;
+  font-weight: 600;
+}
+
+.history-stages h4,
+.history-slos h4 {
+  margin-bottom: 0.5em;
+  color: #333;
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+.stages-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin-bottom: 1em;
+}
+
+.stage-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25em;
+  padding: 0.75em;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.25em;
+  background-color: #ffffff;
+}
+
+.stage-order {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: 500;
+}
+
+.stage-percent {
+  font-size: 1em;
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.stage-soak {
+  font-size: 0.875em;
+  color: #666;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.stage-description {
+  font-size: 0.75em;
+  color: #666;
+  font-style: italic;
+}
+
+.slos-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.slo-item {
+  padding: 0.75em;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.25em;
+  background-color: #ffffff;
+  font-size: 0.875em;
+  color: #333;
+  font-family: 'Roboto Mono', monospace;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  padding: 2em 0;
+}
+
+.loading-more {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: #666;
+  font-size: 0.875em;
+  font-style: italic;
+}
+
+.loading-more::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  border: 2px solid #e0e0e0;
+  border-top: 2px solid #1976d2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .history-header {
+    flex-direction: column;
+    gap: 1em;
+  }
+  
+  .history-timestamps {
+    align-items: flex-start;
+  }
+  
+  .history-summary {
+    flex-direction: column;
+    gap: 1em;
+  }
+  
+  .stages-grid {
+    grid-template-columns: 1fr;
+  }
+}

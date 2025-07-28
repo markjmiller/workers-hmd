@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { components } from '../../types/api';
+import { StageItem } from './StageItem';
 import './Release.css';
 
 type Release = components['schemas']['Release'];
@@ -319,25 +320,13 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange 
             {activeRelease.plan_record.stages.map((planStage) => {
               const releaseStage = activeRelease.stages?.find(s => s.order === planStage.order);
               return (
-                <div key={planStage.order} className="release-stage-item">
-                  <div className="stage-info">
-                    <span className="stage-number">Stage {planStage.order + 1}</span>
-                    <span className="stage-target">{planStage.target_percent}%</span>
-                    <span className="stage-description">{planStage.description || 'No description'}</span>
-                  </div>
-                  {releaseStage && (
-                    <div className="stage-status">
-                      <span className={`stage-state ${releaseStage.state}`}>
-                        {releaseStage.state.toUpperCase()}
-                      </span>
-                      {releaseStage.time_elapsed > 0 && (
-                        <span className="stage-time">
-                          {Math.floor(releaseStage.time_elapsed / 60)}m
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <StageItem
+                  key={planStage.order}
+                  planStage={planStage}
+                  releaseStage={releaseStage}
+                  showStatus={true}
+                  showSoakTime={true}
+                />
               );
             })}
           </div>

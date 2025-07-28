@@ -161,6 +161,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     // Insert the new stage before the last one
     const newStage: PlanStage = {
       order: maxOrder - 1, // This will be the new second-to-last stage
+      description: "",
       target_percent: stages[maxOrder - 1].target_percent + 1, // Start at 1% higher than the previous stage
       soak_time: 60,
       auto_progress: false,

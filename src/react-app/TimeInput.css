@@ -45,12 +45,12 @@
 }
 
 .time-input-field.hours {
-  width: 2em;
+  width: 1em;
 }
 
 .time-input-field.minutes,
 .time-input-field.seconds {
-  width: 2.5em;
+  width: 1.5em;
 }
 
 .time-input-field:focus {

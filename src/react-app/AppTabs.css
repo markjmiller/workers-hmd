@@ -1,4 +1,4 @@
-/* PlanTabs Component Styles */
+/* AppTabs Component Styles */
 
 .plan-tabs-separator {
   margin-top: 1.5em;
@@ -28,7 +28,7 @@
 
 .plan-tabs-json-label {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: 0.5em;
   font-size: 0.875em;
 }

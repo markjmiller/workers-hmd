@@ -61,6 +61,47 @@ paths:
       operationId: listReleases
       tags:
         - Release
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of releases to return (default 50, max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Number of releases to skip for pagination (default 0)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: since
+          in: query
+          description: Filter releases created after this timestamp (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: '2024-01-01T00:00:00Z'
+        - name: until
+          in: query
+          description: Filter releases created before this timestamp (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: '2024-12-31T23:59:59Z'
+        - name: state
+          in: query
+          description: Filter releases by state
+          required: false
+          schema:
+            type: string
+            enum: [not_started, running, done_successful, done_stopped_manually, done_failed_slo]
       responses:
         200:
           description: List of releases retrieved successfully
@@ -235,6 +276,7 @@ components:
       type: object
       example:
         order: 0
+        description: ""
         target_percent: 25
         soak_time: 10
         auto_progress: true
@@ -260,6 +302,7 @@ components:
           type: boolean
     ReleaseStage:
       type: object
+      readOnly: true
       example:
         id: "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
         order: 0
@@ -272,6 +315,7 @@ components:
         - state
         - time_started
         - time_elapsed
+        - time_done
         - logs
       properties:
         id:
@@ -280,6 +324,7 @@ components:
           description: order of the stage in the release
           type: integer
         state:
+          description: state of the stage
           type: string
           enum:
             - queued
@@ -292,6 +337,9 @@ components:
           format: date-time
         time_elapsed:
           type: integer
+        time_done:
+          type: string
+          format: date-time
         logs:
           type: string
     Release:

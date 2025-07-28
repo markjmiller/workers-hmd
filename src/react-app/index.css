@@ -53,6 +53,59 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Common Animations */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* Common Utility Classes */
+.loading-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid #e0e0e0;
+  border-top: 2px solid #1976d2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.nice-button {
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  padding: 0.75em 1.5em;
+  border-radius: 0.375em;
+  font-size: 0.875em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Roboto', sans-serif;
+}
+
+.nice-button:hover:not(:disabled) {
+  background-color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 0.25em 0.5em rgba(25, 118, 210, 0.3);
+}
+
+.nice-button:active {
+  transform: translateY(0);
+  box-shadow: 0 0.125em 0.25em rgba(25, 118, 210, 0.2);
+}
+
+.nice-button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

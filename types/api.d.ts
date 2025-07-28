@@ -130,6 +130,7 @@ export interface components {
     schemas: {
         /** @example {
          *       "order": 0,
+         *       "description": "",
          *       "target_percent": 25,
          *       "soak_time": 10,
          *       "auto_progress": true
@@ -156,11 +157,16 @@ export interface components {
             id: string;
             /** @description order of the stage in the release */
             order: number;
-            /** @enum {string} */
+            /**
+             * @description state of the stage
+             * @enum {string}
+             */
             state: "queued" | "awaiting_approval" | "running" | "done_failed" | "done_successful";
             /** Format: date-time */
             time_started: string;
             time_elapsed: number;
+            /** Format: date-time */
+            time_done: string;
             logs: string;
         };
         /** @example {
@@ -296,7 +302,18 @@ export interface operations {
     };
     listReleases: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Maximum number of releases to return (default 50, max 100) */
+                limit?: number;
+                /** @description Number of releases to skip for pagination (default 0) */
+                offset?: number;
+                /** @description Filter releases created after this timestamp (ISO 8601 format) */
+                since?: string;
+                /** @description Filter releases created before this timestamp (ISO 8601 format) */
+                until?: string;
+                /** @description Filter releases by state */
+                state?: "not_started" | "running" | "done_successful" | "done_stopped_manually" | "done_failed_slo";
+            };
             header?: never;
             path?: never;
             cookie?: never;

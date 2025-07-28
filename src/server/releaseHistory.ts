@@ -61,7 +61,13 @@ export class ReleaseHistory extends DurableObject<Env> {
     if (releaseIndex === -1) {
       return false; // Release not found
     }
-    
+    const previousState = history.releases[releaseIndex].state;
+    if (previousState === "not_started" && state === "running") {
+      history.releases[releaseIndex].time_started = new Date().toISOString();
+    }
+    if (previousState === "running" && (state === "done_successful" || state === "done_stopped_manually" || state === "done_failed_slo")) {
+      history.releases[releaseIndex].time_done = new Date().toISOString();
+    }
     history.releases[releaseIndex].state = state;
     await this.saveReleaseHistory(history);
     return true;
@@ -86,7 +92,10 @@ export class ReleaseHistory extends DurableObject<Env> {
 
   async getAllReleases(): Promise<Release[]> {
     const history = await this.getReleaseHistory();
-    return [...history.releases];
+    const _history = [...history.releases];
+    // TODO: calculate time elapsed
+    _history.map(release => release.time_elapsed = 120);
+    return _history;
   }
 
   async getRelease(id: string): Promise<Release | undefined> {

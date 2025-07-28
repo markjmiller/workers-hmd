@@ -160,18 +160,43 @@
 .stage-number {
   font-weight: 600;
   color: #212121;
-  min-width: 4em;
+  width: 2.5em;
+  flex-shrink: 0;
 }
 
 .stage-target {
   font-weight: 500;
   color: #1976d2;
-  min-width: 3em;
+  width: 3.5em;
+  flex-shrink: 0;
+}
+
+.stage-soak {
+  font-weight: 400;
+  color: #666;
+  width: 3em;
+  flex-shrink: 0;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.875em;
 }
 
 .stage-description {
   color: #666;
   font-size: 0.875em;
+  flex: 1;
+  text-align: left;
+  min-height: 1.2em;
+  display: flex;
+  align-items: center;
+}
+
+.stage-auto-progress {
+  color: #4caf50;
+  font-size: 0.875em;
+  padding: 0.125em 0.25em;
+  background-color: #e8f5e9;
+  border-radius: 0.25em;
+  border: 1px solid #4caf50;
 }
 
 .stage-status {
@@ -222,7 +247,6 @@
 
 .slo-value {
   font-family: monospace;
-  font-size: 0.875em;
   color: #212121;
 }
 
