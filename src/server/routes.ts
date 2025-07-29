@@ -185,11 +185,8 @@ api.get("/release/active", async (c) => {
     const releaseHistory = getMainReleaseHistory(c);
     const activeRelease = await releaseHistory.getActiveRelease();
     
-    if (!activeRelease) {
-      return c.json({ message: "No active release found", ok: false }, 404);
-    }
-    
-    return c.json(activeRelease, 200);
+    // Always return 200 OK - null when no active release, release object when active
+    return c.json(activeRelease ?? null, 200);
   } catch (error) {
     console.error("Error getting active release:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { components } from '../../types/api';
+import { formatStageState, formatTimeHMS, api } from './utils';
 
 type PlanStage = components['schemas']['PlanStage'];
 type ReleaseStage = components['schemas']['ReleaseStage'];
@@ -13,34 +14,6 @@ interface StageItemProps {
   onError?: (error: string) => void;
   disableActions?: boolean; // Disable approve/cancel buttons (e.g., for History tab)
 }
-
-// Helper function to format stage state display names
-const formatStageState = (state: string): string => {
-  switch (state) {
-    case 'queued':
-      return 'QUEUED';
-    case 'awaiting_approval':
-      return 'AWAITING APPROVAL';
-    case 'running':
-      return 'RUNNING';
-    case 'done_failed':
-      return 'FAILED';
-    case 'done_successful':
-      return 'SUCCESS';
-    case 'done_cancelled':
-      return 'CANCELLED';
-    default:
-      return state.toUpperCase();
-  }
-};
-
-// Helper function to format time as H:M:S
-const formatTimeHMS = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
 
 
 
@@ -60,19 +33,7 @@ export const StageItem: React.FC<StageItemProps> = ({
   const progressStage = async (stageId: string) => {
     try {
       setIsProgressing(true);
-      const response = await fetch(`/api/stage/${stageId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: 'approve'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to progress stage: ${response.statusText}`);
-      }
-
-      console.log(`Stage ${stageId} progressed successfully`);
+      await api.progressStage(stageId, 'approve');
     } catch (error) {
       console.error('Error progressing stage:', error);
       if (onError) {
@@ -86,18 +47,7 @@ export const StageItem: React.FC<StageItemProps> = ({
   const cancelStage = async (stageId: string) => {
     try {
       setIsCancelling(true);
-      const response = await fetch(`/api/stage/${stageId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: 'deny'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to cancel stage: ${response.statusText}`);
-      }
-
+      await api.progressStage(stageId, 'deny');
       console.log(`Stage ${stageId} cancelled successfully`);
     } catch (error) {
       console.error('Error cancelling stage:', error);

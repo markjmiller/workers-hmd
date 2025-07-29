@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { components } from '../../types/api';
 import { StageItem } from './StageItem';
+import { formatReleaseState, getStateColor, api, isReleaseComplete } from './utils';
 import './History.css';
 
 type Release = components["schemas"]["Release"];
@@ -58,14 +59,11 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         queryParams.set('until', endOfDay.toISOString());
       }
       
-      const response = await fetch(`/api/release?${queryParams}`);
-      
-      if (response.ok) {
-        const releaseHistory = await response.json();
-        // Filter out active releases (not_started, running) to show only completed releases
-        const completedReleases = releaseHistory.filter((release: Release) => 
-          release.state !== "not_started" && release.state !== "running"
-        );
+      const releaseHistory = await api.getReleaseHistory(queryParams);
+      // Filter out active releases to show only completed releases
+      const completedReleases = releaseHistory.filter((release: Release) => 
+        isReleaseComplete(release.state)
+      );
         
         // Check if there are more results (we fetched 6, so if we have 6+ completed releases, there are more)
         const hasMore = completedReleases.length > 5;
@@ -90,9 +88,6 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         }
         
         setHasMoreResults(hasMore);
-      } else {
-        throw new Error(`Failed to fetch release history: ${response.statusText}`);
-      }
     } catch (error) {
       console.error('Error fetching release history:', error);
       if (onError) {
@@ -104,22 +99,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
     }
   };
 
-  const getStateDisplayName = (state: string) => {
-    switch (state) {
-      case 'not_started':
-        return 'Not Started';
-      case 'running':
-        return 'Running';
-      case 'done_successful':
-        return 'Success';
-      case 'done_stopped_manually':
-        return 'Stopped Manually';
-      case 'done_failed_slo':
-        return 'Failed SLOs';
-      default:
-        return state.replace(/_/g, ' ').toUpperCase();
-    }
-  };
+
 
   const fetchStageDataForReleases = async (releasesToFetch: Release[]) => {
     const stageDataPromises = releasesToFetch.map(async (release) => {
@@ -131,14 +111,11 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         if (!stageRef.id) return null;
         
         try {
-          const response = await fetch(`/api/stage/${stageRef.id}`);
-          if (response.ok) {
-            return await response.json() as ReleaseStage;
-          }
+          return await api.getStage(stageRef.id) as ReleaseStage;
         } catch (error) {
           console.warn(`Error fetching stage ${stageRef.id}:`, error);
+          return null;
         }
-        return null;
       });
 
       const stages = await Promise.all(stagePromises);
@@ -163,18 +140,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
     }
   };
 
-  const getStateColor = (state: string) => {
-    switch (state) {
-      case 'done_successful':
-        return '#4caf50';
-      case 'done_stopped_manually':
-        return '#ff9800';
-      case 'done_failed_slo':
-        return '#f44336';
-      default:
-        return '#757575';
-    }
-  };
+
 
   const toggleReleaseExpanded = (releaseId: string) => {
     setExpandedReleases(prev => {
@@ -285,7 +251,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                         className="history-state"
                         style={{ backgroundColor: getStateColor(release.state) }}
                       >
-                        {getStateDisplayName(release.state)}
+                        {formatReleaseState(release.state)}
                       </span>
                       <span className="history-id">ID: {release.id}</span>
                       {release.time_elapsed !== undefined && (

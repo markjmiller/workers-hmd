@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppTabs } from './AppTabs';
 import { ReleasePlanTable } from './ReleasePlanTable';
+import { api } from './utils';
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
@@ -134,13 +135,7 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/plan');
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch plan: ${response.status} ${response.statusText}`);
-        }
-        
-        const planData: Plan = await response.json();
+        const planData: Plan = await api.getPlan();
         setPlan(planData);
       } catch (err) {
         console.error('Error fetching plan:', err);
@@ -161,19 +156,7 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
     try {
       setSaveSuccess(false); // Clear any previous success state
       
-      const response = await fetch('/api/plan', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedPlan),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to save plan: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json() as Plan;
+      const data = await api.updatePlan(updatedPlan);
       setPlan(data);
       setSaveSuccess(true); // Show success message
 

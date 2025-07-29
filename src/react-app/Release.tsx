@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { components } from '../../types/api';
 import { StageItem } from './StageItem';
+import { formatReleaseState, api, isReleaseComplete } from './utils';
 import './Release.css';
 
 type Release = components['schemas']['Release'];
@@ -11,24 +12,6 @@ interface ReleaseProps {
   onReleaseStateChange?: () => void;
   onTabChange?: () => void; // Called when user switches away from Release tab
 }
-
-// Helper function to format release state display names
-const formatReleaseState = (state: string): string => {
-  switch (state) {
-    case 'not_started':
-      return 'NOT STARTED';
-    case 'running':
-      return 'RUNNING';
-    case 'done_successful':
-      return 'SUCCESS';
-    case 'done_failed':
-      return 'FAILED';
-    case 'done_stopped_manually':
-      return 'STOPPED MANUALLY';
-    default:
-      return state.replace('_', ' ').toUpperCase();
-  }
-};
 
 export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange, onTabChange }) => {
   const [activeRelease, setActiveRelease] = useState<Release | null>(null);
@@ -77,9 +60,8 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
 
       try {
         // First, poll the active release to get updated release state
-        const releaseResponse = await fetch('/api/release/active');
-        if (releaseResponse.ok) {
-          const updatedRelease = await releaseResponse.json();
+        try {
+          const updatedRelease = await api.getActiveRelease();
           setActiveRelease(updatedRelease);
           
           // Start/stop elapsed time timer based on release state
@@ -90,15 +72,15 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           }
           
           // If release state changed to a done state, redirect to history tab
-          if (updatedRelease.state.startsWith('done_')) {
+          if (isReleaseComplete(updatedRelease.state)) {
             stopStagePolling();
             if (onTabChange) {
               onTabChange(); // Switch to history tab
             }
             return;
           }
-        } else if (releaseResponse.status === 404) {
-          // Release no longer exists - clear it and stop polling
+        } catch (error) {
+          // Release no longer exists (404) - clear it and stop polling
           setActiveRelease(null);
           setReleaseStages([]);
           stopStagePolling();
@@ -110,14 +92,11 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           if (!stageRef.id) return null;
           
           try {
-            const response = await fetch(`/api/stage/${stageRef.id}`);
-            if (response.ok) {
-              return await response.json() as ReleaseStage;
-            }
+            return await api.getStage(stageRef.id) as ReleaseStage;
           } catch (error) {
             console.warn(`Error polling stage ${stageRef.id}:`, error);
+            return null;
           }
-          return null;
         });
 
         const stages = await Promise.all(stagePromises);
@@ -184,13 +163,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
         if (!stageRef.id) return null;
         
         try {
-          const response = await fetch(`/api/stage/${stageRef.id}`);
-          if (response.ok) {
-            return await response.json() as ReleaseStage;
-          } else {
-            console.warn(`Failed to fetch stage ${stageRef.id}:`, response.statusText);
-            return null;
-          }
+          return await api.getStage(stageRef.id) as ReleaseStage;
         } catch (error) {
           console.warn(`Error fetching stage ${stageRef.id}:`, error);
           return null;
@@ -219,23 +192,25 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   const checkActiveRelease = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/release/active');
+      const release = await api.getActiveRelease();
       
-      if (response.ok) {
-        const release = await response.json();
+      if (release) {
+        // Active release found
         setActiveRelease(release);
         // Fetch stages for the active release
         await fetchStagesForRelease(release);
-      } else if (response.status === 404) {
+      } else {
         // No active release found
         setActiveRelease(null);
         setReleaseStages([]);
-        // Stop polling since there's no active release
         stopStagePolling();
-      } else {
-        throw new Error(`Failed to check active release: ${response.statusText}`);
       }
     } catch (error) {
+      // Handle actual API errors (network issues, server errors, etc.)
+      setActiveRelease(null);
+      setReleaseStages([]);
+      stopStagePolling();
+      
       console.error('Error checking active release:', error);
       if (onError) {
         onError(error instanceof Error ? error.message : 'Failed to check active release');
@@ -248,23 +223,12 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   const createRelease = async () => {
     try {
       setCreating(true);
-      const response = await fetch('/api/release', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const newRelease = await response.json();
-        setActiveRelease(newRelease);
-        // Fetch stages for the new release
-        await fetchStagesForRelease(newRelease);
-        if (onReleaseStateChange) {
-          onReleaseStateChange();
-        }
-      } else {
-        throw new Error(`Failed to create release: ${response.statusText}`);
+      const newRelease = await api.createRelease();
+      setActiveRelease(newRelease);
+      // Fetch stages for the new release
+      await fetchStagesForRelease(newRelease);
+      if (onReleaseStateChange) {
+        onReleaseStateChange();
       }
     } catch (error) {
       console.error('Error creating release:', error);
@@ -281,20 +245,13 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     
     try {
       setDeleting(true);
-      const response = await fetch('/api/release/active', {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setActiveRelease(null);
-        setReleaseStages([]);
-        // Stop polling when release is deleted
-        stopStagePolling();
-        if (onReleaseStateChange) {
-          onReleaseStateChange();
-        }
-      } else {
-        throw new Error(`Failed to delete release: ${response.statusText}`);
+      await api.deleteActiveRelease();
+      setActiveRelease(null);
+      setReleaseStages([]);
+      // Stop polling when release is deleted
+      stopStagePolling();
+      if (onReleaseStateChange) {
+        onReleaseStateChange();
       }
     } catch (error) {
       console.error('Error deleting release:', error);
@@ -311,34 +268,13 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     
     try {
       setStarting(true);
-      const response = await fetch('/api/release/active', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/text',
-        },
-        body: 'start',
-      });
-
-      if (response.ok) {
-        // Release started successfully
-        // Refresh the release data to get updated state
-        await checkActiveRelease();
-        // Notify parent component that release state has changed
-        if (onReleaseStateChange) {
-          onReleaseStateChange();
-        }
-      } else if (response.status === 404) {
-        // No active release found
-        if (onError) {
-          onError('No active release found');
-        }
-      } else if (response.status === 400) {
-        // Invalid command or release state
-        if (onError) {
-          onError('Cannot start release - invalid state or command');
-        }
-      } else {
-        throw new Error(`Failed to start release: ${response.statusText}`);
+      await api.startRelease();
+      // Release started successfully
+      // Refresh the release data to get updated state
+      await checkActiveRelease();
+      // Notify parent component that release state has changed
+      if (onReleaseStateChange) {
+        onReleaseStateChange();
       }
     } catch (error) {
       console.error('Error starting release:', error);
@@ -355,34 +291,13 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     
     try {
       setStopping(true);
-      const response = await fetch('/api/release/active', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/text',
-        },
-        body: 'stop',
-      });
-
-      if (response.ok) {
-        // Release stopped successfully
-        // Refresh the release data to get updated state
-        await checkActiveRelease();
-        // Notify parent component that release state has changed
-        if (onReleaseStateChange) {
-          onReleaseStateChange();
-        }
-      } else if (response.status === 404) {
-        // No active release found
-        if (onError) {
-          onError('No active release found');
-        }
-      } else if (response.status === 400) {
-        // Invalid command or release state
-        if (onError) {
-          onError('Cannot stop release - invalid state or command');
-        }
-      } else {
-        throw new Error(`Failed to stop release: ${response.statusText}`);
+      await api.stopRelease();
+      // Release stopped successfully
+      // Refresh the release data to get updated state
+      await checkActiveRelease();
+      // Notify parent component that release state has changed
+      if (onReleaseStateChange) {
+        onReleaseStateChange();
       }
     } catch (error) {
       console.error('Error stopping release:', error);

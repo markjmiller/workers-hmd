@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Release } from './Release';
 import { History } from './History';
+import { api } from './utils';
 import './AppTabs.css';
 import type { components } from "../../types/api";
 
@@ -20,13 +21,12 @@ export const AppTabs: React.FC<AppTabsProps> = ({
 
   // Check for active release function
   const checkActiveRelease = async () => {
+    const currentHasActive = hasActiveReleaseRef.current;
     try {
-      const currentHasActive = hasActiveReleaseRef.current;
-      const response = await fetch('/api/release/active');
+      const release = await api.getActiveRelease();
       
-      if (response.ok) {
-        const release = await response.json();
-        
+      if (release) {
+        // Active release found
         hasActiveReleaseRef.current = true;
         setHasActiveRelease(true);
         setActiveReleaseState(release.state);
@@ -35,9 +35,7 @@ export const AppTabs: React.FC<AppTabsProps> = ({
           setActiveTab('release');
         }
       } else {
-        // No active release found
-        
-        // Check if we had an active release before and now we don't (release finished)
+        // No active release found - check if we had one before (release finished)
         if (currentHasActive) {
           // Release just finished, auto-open History tab
           setActiveTab('history');
@@ -49,6 +47,7 @@ export const AppTabs: React.FC<AppTabsProps> = ({
       }
     } catch (error) {
       console.error('Error checking active release:', error);
+      // Handle actual API errors (network issues, server errors, etc.)
       hasActiveReleaseRef.current = false;
       setHasActiveRelease(false);
       setActiveReleaseState(null);

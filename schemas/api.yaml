@@ -163,19 +163,20 @@ paths:
   /release/active:
     get:
       summary: Get active release
-      description: Retrieve the active release
+      description: Retrieve the active release, or null if no active release exists
       operationId: getActiveRelease
       tags:
         - Release
       responses:
         200:
-          description: Active release retrieved successfully
+          description: Success (returns active release or null)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Release"
-        404:
-          description: No active release found
+                oneOf:
+                  - $ref: "#/components/schemas/Release"
+                  - type: "null"
+                description: Active release object if one exists, null otherwise
     post:
       summary: Control active release execution
       description: Start or stop the active release
