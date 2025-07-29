@@ -65,8 +65,16 @@ export interface paths {
          */
         get: operations["getActiveRelease"];
         put?: never;
-        post?: never;
-        delete?: never;
+        /**
+         * Control active release execution
+         * @description Start or stop the active release
+         */
+        post: operations["controlActiveRelease"];
+        /**
+         * Delete active release
+         * @description Delete the active release if it is in 'not_started' state
+         */
+        delete: operations["deleteActiveRelease"];
         options?: never;
         head?: never;
         patch?: never;
@@ -85,22 +93,14 @@ export interface paths {
          */
         get: operations["getRelease"];
         put?: never;
-        /**
-         * Control release execution
-         * @description Start or stop a release. Only one release can be active at a time
-         */
-        post: operations["controlRelease"];
-        /**
-         * Delete release
-         * @description Delete a release that is in 'not_started' state
-         */
-        delete: operations["deleteRelease"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/release/{releaseId}/stage/{releaseStageId}": {
+    "/stage/{stageId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -108,16 +108,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get release stage status
-         * @description Get the current state of a specific stage within a release
+         * Get stage status
+         * @description Get the current state of a specific stage
          */
-        get: operations["getReleaseStage"];
+        get: operations["getStage"];
         put?: never;
         /**
-         * Progress release stage
-         * @description Advance a stage if it is in the 'awaiting_approval' state
+         * Progress stage
+         * @description Advance a stage by approving or denying it
          */
-        post: operations["progressReleaseStage"];
+        post: operations["progressStage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -147,21 +147,26 @@ export interface components {
             auto_progress: boolean;
         };
         /** @example {
-         *       "id": "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5",
-         *       "order": 0,
+         *       "id": "release-1a2b3c4d-order-2",
+         *       "order": 2,
+         *       "releaseId": "1a2b3c4d",
          *       "state": "queued",
          *       "time_started": "2023-01-01T00:00:00Z",
-         *       "time_elapsed": 0
+         *       "time_elapsed": 0,
+         *       "time_done": "2023-01-01T00:00:00Z",
+         *       "logs": ""
          *     } */
         ReleaseStage: {
             id: string;
             /** @description order of the stage in the release */
             order: number;
+            /** @description id of the release */
+            releaseId: string;
             /**
              * @description state of the stage
              * @enum {string}
              */
-            state: "queued" | "awaiting_approval" | "running" | "done_failed" | "done_successful";
+            state: "queued" | "awaiting_approval" | "running" | "done_failed" | "done_successful" | "done_cancelled" | "error";
             /** Format: date-time */
             time_started: string;
             time_elapsed: number;
@@ -175,11 +180,12 @@ export interface components {
          *       "plan_record": {
          *         "$ref": "#/components/schemas/Plan"
          *       },
-         *       "stages": [
-         *         {
-         *           "$ref": "#/components/schemas/ReleaseStage"
+         *       "stages": {
+         *         "type": "array",
+         *         "items": {
+         *           "$ref": "#/components/schemas/StageId"
          *         }
-         *       ],
+         *       },
          *       "time_started": {
          *         "type": "string",
          *         "format": "date-time"
@@ -195,9 +201,9 @@ export interface components {
         Release: {
             id: string;
             /** @enum {string} */
-            state: "not_started" | "running" | "done_stopped_manually" | "done_failed_slo" | "done_successful";
+            state: "not_started" | "running" | "done_stopped_manually" | "done_failed_slo" | "done_successful" | "error";
             plan_record: components["schemas"]["Plan"];
-            stages: components["schemas"]["ReleaseStage"][];
+            stages: components["schemas"]["StageId"][];
             /** Format: date-time */
             time_created: string;
             /** Format: date-time */
@@ -205,6 +211,10 @@ export interface components {
             time_elapsed: number;
             /** Format: date-time */
             time_done: string;
+        };
+        StageId: {
+            id: string;
+            order: number;
         };
         /** @example {
          *       "stages": [
@@ -233,7 +243,7 @@ export interface components {
     };
     responses: never;
     parameters: {
-        releaseStageId: string;
+        stageId: string;
         releaseId: string;
     };
     requestBodies: never;
@@ -399,6 +409,74 @@ export interface operations {
             };
         };
     };
+    controlActiveRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/text": "start" | "stop";
+            };
+        };
+        responses: {
+            /** @description start or stop was successful */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The provided command is not valid for the release in its current state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active release found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteActiveRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active release found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release has to be in a "not_started" state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getRelease: {
         parameters: {
             query?: never;
@@ -428,85 +506,12 @@ export interface operations {
             };
         };
     };
-    controlRelease: {
+    getStage: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                releaseId: components["parameters"]["releaseId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/text": "start" | "stop";
-            };
-        };
-        responses: {
-            /** @description start or stop was successful */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The provided command is not valid for the release in its current state */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Release not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    deleteRelease: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                releaseId: components["parameters"]["releaseId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Release deleted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Release not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Release has to be in a "not_started" state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    getReleaseStage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                releaseId: components["parameters"]["releaseId"];
-                releaseStageId: components["parameters"]["releaseStageId"];
+                stageId: components["parameters"]["stageId"];
             };
             cookie?: never;
         };
@@ -530,13 +535,12 @@ export interface operations {
             };
         };
     };
-    progressReleaseStage: {
+    progressStage: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                releaseId: components["parameters"]["releaseId"];
-                releaseStageId: components["parameters"]["releaseStageId"];
+                stageId: components["parameters"]["stageId"];
             };
             cookie?: never;
         };
@@ -553,15 +557,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Stage not found */
-            404: {
+            /** @description Invalid command */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Stage has to be in a "awaiting_approval" state */
-            409: {
+            /** @description Stage not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

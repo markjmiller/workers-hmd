@@ -9,15 +9,18 @@ interface HistoryProps {
   onError?: (error: string) => void;
 }
 
+type ReleaseStage = components["schemas"]["ReleaseStage"];
+
 export const History: React.FC<HistoryProps> = ({ onError }) => {
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(0);
-  const [hasMoreResults, setHasMoreResults] = useState<boolean>(false);
+  const [_, setHasMoreResults] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
+  const [releaseStages, setReleaseStages] = useState<Record<string, ReleaseStage[]>>({});
 
   useEffect(() => {
     fetchReleaseHistory(true);
@@ -75,11 +78,15 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
           if (displayReleases.length > 0) {
             setExpandedReleases(new Set([displayReleases[0].id]));
           }
+          // Fetch stage data for all releases
+          fetchStageDataForReleases(displayReleases);
         } else {
           setReleases(prev => [...prev, ...displayReleases]);
           if (pageNum !== undefined) {
             setCurrentPage(pageNum);
           }
+          // Fetch stage data for new releases
+          fetchStageDataForReleases(displayReleases);
         }
         
         setHasMoreResults(hasMore);
@@ -104,13 +111,55 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
       case 'running':
         return 'Running';
       case 'done_successful':
-        return 'Successful';
+        return 'Success';
       case 'done_stopped_manually':
         return 'Stopped Manually';
       case 'done_failed_slo':
-        return 'Failed SLO';
+        return 'Failed SLOs';
       default:
         return state.replace(/_/g, ' ').toUpperCase();
+    }
+  };
+
+  const fetchStageDataForReleases = async (releasesToFetch: Release[]) => {
+    const stageDataPromises = releasesToFetch.map(async (release) => {
+      if (!release.stages || release.stages.length === 0) {
+        return { releaseId: release.id, stages: [] };
+      }
+
+      const stagePromises = release.stages.map(async (stageRef) => {
+        if (!stageRef.id) return null;
+        
+        try {
+          const response = await fetch(`/api/stage/${stageRef.id}`);
+          if (response.ok) {
+            return await response.json() as ReleaseStage;
+          }
+        } catch (error) {
+          console.warn(`Error fetching stage ${stageRef.id}:`, error);
+        }
+        return null;
+      });
+
+      const stages = await Promise.all(stagePromises);
+      const validStages = stages.filter((stage): stage is ReleaseStage => stage !== null);
+      
+      // Sort stages by order
+      validStages.sort((a, b) => a.order - b.order);
+      
+      return { releaseId: release.id, stages: validStages };
+    });
+
+    try {
+      const stageDataResults = await Promise.all(stageDataPromises);
+      const stageDataMap = stageDataResults.reduce((acc, { releaseId, stages }) => {
+        acc[releaseId] = stages;
+        return acc;
+      }, {} as Record<string, ReleaseStage[]>);
+      
+      setReleaseStages(prev => ({ ...prev, ...stageDataMap }));
+    } catch (error) {
+      console.error('Error fetching stage data:', error);
     }
   };
 
@@ -286,14 +335,18 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                       <div className="history-stages">
                         <h4>Stages</h4>
                         <div className="stages-grid">
-                          {release.plan_record.stages.map((planStage) => (
-                            <StageItem
-                              key={planStage.order}
-                              planStage={planStage}
-                              showStatus={false}
-                              showSoakTime={true}
-                            />
-                          ))}
+                          {release.plan_record.stages.map((planStage) => {
+                            const executedStage = releaseStages[release.id]?.find(stage => stage.order === planStage.order);
+                            return (
+                              <StageItem
+                                key={planStage.order}
+                                planStage={planStage}
+                                releaseStage={executedStage}
+                                showStatus={true}
+                                showSoakTime={true}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     </div>

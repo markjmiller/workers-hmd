@@ -1,22 +1,42 @@
 import { Hono } from "hono";
+
+
 import { prettyJSON } from "hono/pretty-json";
 import { validator } from "hono/validator";
 import type { components } from "../../types/api";
 import { PlanStorage } from "./plan";
+import { StageStorage } from "./stage";
 import { ReleaseHistory } from "./releaseHistory";
+import { ReleaseWorkflow, ReleaseWorkflowParams } from "./releaseWorkflow";
 
 type Plan = components["schemas"]["Plan"];
 type Release = components["schemas"]["Release"];
-type ReleaseStage = components["schemas"]["ReleaseStage"];
 
 function isValidId(value: string): boolean {
   return value.match(/^[0-9a-fA-F]{8}$/g) !== null;
 }
 
+function isValidStageId(value: string): boolean {
+  return value.match(/^release-[0-9a-fA-F]{8}-order-[0-9]+$/g) !== null;
+}
+
+function getStageId(releaseId: string, stageOrder: string | number): string {
+  return `release-${releaseId}-order-${stageOrder}`;
+}
+
+// function parseReleaseIdFromStageId(stageId: string): string {
+//   const match = stageId.match(/^release-([0-9a-fA-F]{8})-stage-[0-9]+$/);
+//   if (!match) {
+//     throw new Error("Invalid stage ID");
+//   }
+//   return match[1];
+// }
+
 declare module "hono" {
   interface ContextVariableMap {
     plan: DurableObjectStub<PlanStorage>;
     releaseHistory: DurableObjectStub<ReleaseHistory>;
+    releaseWorkflow: Workflow<ReleaseWorkflowParams>;
   }
 }
 
@@ -34,7 +54,7 @@ const api = new Hono<{ Bindings: Cloudflare.Env }>();
 
 api.get("/plan", async (c) => {
   try {
-    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan("main");
+    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan();
     return c.json<Plan>(plan, 200);
   } catch (error) {
     console.error("Error getting plan:", error);
@@ -51,7 +71,7 @@ api.post("/plan", validator("json", (value, c) => {
 }), async (c) => {
   try {
     const plan = c.req.valid("json");
-    const updatedPlan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).updatePlan("main", plan);
+    const updatedPlan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).updatePlan(plan);
     return c.json<Plan>(updatedPlan, 200);
   } catch (error) {
     console.error("Error updating plan:", error);
@@ -130,7 +150,7 @@ api.post("/release", async (c) => {
     }
     
     // Create release from current plan
-    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan("main");
+    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan();
     const releaseId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const currentTime = new Date().toISOString();
     
@@ -138,22 +158,31 @@ api.post("/release", async (c) => {
       id: releaseId,
       state: "not_started",
       plan_record: plan,
-      stages: plan.stages.map((stage) => ({
-        id: `stage-${releaseId}-${stage.order}`,
-        order: stage.order,
-        state: "queued" as const,
-        time_started: "",
-        time_elapsed: 0,
-        time_done: "",
-        logs: "",
-      })),
+      stages: plan.stages.map((stage) => ({ id: `release-${releaseId}-order-${stage.order}`, order: stage.order })),
       time_created: currentTime,
       time_started: "",
       time_elapsed: 0,
       time_done: "",
     };
+
+    // Create stages for the release
+    for (const planStage of plan.stages) {
+      const stageId = getStageId(releaseId, planStage.order);
+      const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+      await stageStorage.initialize({
+          id: stageId,
+          order: planStage.order,
+          releaseId: releaseId,
+          state: "queued",
+          time_started: "",
+          time_elapsed: 0,
+          time_done: "",
+          logs: "",
+      });
+    }
     
     const createdRelease = await releaseHistory.createRelease(newRelease);
+
     return c.json(createdRelease, 200);
   } catch (error) {
     console.error("Error creating release:", error);
@@ -173,6 +202,114 @@ api.get("/release/active", async (c) => {
     return c.json(activeRelease, 200);
   } catch (error) {
     console.error("Error getting active release:", error);
+    return c.json({ message: "Internal Server Error", ok: false }, 500);
+  }
+});
+
+api.post("/release/active", async (c) => {
+  try {
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const activeRelease = await releaseHistory.getActiveRelease();
+    
+    if (!activeRelease) {
+      return c.json({ message: "No active release found", ok: false }, 404);
+    }
+    
+    // According to the OpenAPI spec, the content type should be application/text
+    const command = await c.req.text();
+    
+    if (command !== "start" && command !== "stop") {
+      return c.json({ message: "Invalid command: must be 'start' or 'stop'", ok: false }, 400);
+    }
+
+    const activeReleaseId = activeRelease.id;
+
+    if (command === "start") {
+      // Only allow starting if release is in not_started state
+      if (activeRelease.state !== "not_started") {
+        return c.json({ 
+          message: `Cannot start release in '${activeRelease.state}' state`, 
+          ok: false 
+        }, 400);
+      }
+
+      const releaseWorkflow = await c.env.RELEASE_WORKFLOW.create({
+        id: activeReleaseId,
+        params: { releaseId: activeReleaseId }
+      });
+      
+      await releaseHistory.updateReleaseState(activeReleaseId, "running");
+
+      releaseWorkflow.sendEvent({ type: "release-start", payload: null });
+      
+      return c.text("Release started successfully", 200);
+    } else if (command === "stop") {
+      // Only allow stopping if release is in running state
+      if (activeRelease.state !== "running") {
+        return c.json({ 
+          message: `Cannot stop release in '${activeRelease.state}' state`, 
+          ok: false 
+        }, 400);
+      }
+
+      // TODO: there is a race condition here because the workflow might still be running
+      //       we should be able to terminate the workflow, but that method isn't implemented
+      //       yet. When it is, I think we can await workflow.terminate()
+      //
+      // Update all non-completed stages to cancelled state
+      const allStages = activeRelease.plan_record.stages;
+      for (const stageInfo of allStages) {
+        const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(`release-${activeRelease.id}-order-${stageInfo.order}`));
+        const currentStage = await stageStorage.get();
+        // Only update stages that exist and are not already in a done state
+        if (currentStage && !currentStage.state.startsWith('done_')) {
+          await stageStorage.updateStageState("done_cancelled");
+          console.log(`🚫 Set stage ${stageInfo.order} to done_cancelled due to release stop`);
+        }
+      }
+      
+      // Update release state to done_stopped_manually
+      const updated = await releaseHistory.updateReleaseState(activeRelease.id, "done_stopped_manually");
+
+      if (!updated) {
+        return c.json({ message: "Failed to update release state", ok: false }, 500);
+      }
+      
+      return c.text("Release stopped successfully", 200);
+    }
+  } catch (error) {
+    console.error("Error controlling active release:", error);
+    return c.json({ message: "Internal Server Error", ok: false }, 500);
+  }
+});
+
+api.delete("/release/active", async (c) => {
+  try {
+    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    
+    // Get the active release to check its state
+    const activeRelease = await releaseHistory.getActiveRelease();
+    if (!activeRelease) {
+      return c.json({ message: "No active release found", ok: false }, 404);
+    }
+    
+    // According to OpenAPI spec, can only delete releases in "not_started" state
+    if (activeRelease.state !== "not_started") {
+      return c.json({ 
+        message: "Release has to be in a \"not_started\" state", 
+        ok: false 
+      }, 409);
+    }
+    
+    // Delete the active release
+    const deleted = await releaseHistory.removeRelease(activeRelease.id);
+    if (!deleted) {
+      return c.json({ message: "Release not found", ok: false }, 404);
+    }
+    
+    return c.text("Release deleted", 200);
+  } catch (error) {
+    console.error("Error deleting active release:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
@@ -198,146 +335,35 @@ api.get("/release/:releaseId", async (c) => {
   }
 });
 
-api.post("/release/:releaseId", async (c) => {
+api.get("/stage/:stageId", async (c) => {
   try {
-    const releaseId = c.req.param("releaseId");
-    if (!isValidId(releaseId)) {
-      return c.json({ message: "Release not found", ok: false }, 404);
+    const stageId = c.req.param("stageId");
+    
+    if (!isValidStageId(stageId)) {
+      return c.json({ message: "Stage not found", ok: false }, 404);
     }
     
-    // According to the OpenAPI spec, the content type should be application/text
-    const command = await c.req.text();
-    
-    if (command !== "start" && command !== "stop") {
-      return c.json({ message: "Invalid command: must be 'start' or 'stop'", ok: false }, 400);
-    }
-    
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
-    const release = await releaseHistory.getRelease(releaseId);
-    
-    if (!release) {
-      return c.json({ message: "Release not found", ok: false }, 404);
-    }
-
-    // Simulate a delay to see UI states
-    // TODO: don't forget to eventually remove this
-    await (function sleep(milliseconds) {
-      return new Promise(r=>setTimeout(r, milliseconds));
-    })(1000);
-    
-    if (command === "start") {
-      // Only allow starting if release is in not_started state
-      if (release.state !== "not_started") {
-        return c.json({ 
-          message: `Cannot start release in '${release.state}' state`, 
-          ok: false 
-        }, 400);
-      }
-      
-      // Update release state to running
-      const updated = await releaseHistory.updateReleaseState(releaseId, "running");
-      if (!updated) {
-        return c.json({ message: "Failed to update release state", ok: false }, 500);
-      }
-      
-      return c.text("Release started successfully", 200);
-    } else if (command === "stop") {
-      // Only allow stopping if release is in running state
-      if (release.state !== "running") {
-        return c.json({ 
-          message: `Cannot stop release in '${release.state}' state`, 
-          ok: false 
-        }, 400);
-      }
-      
-      // Update release state to done_stopped_manually
-      const updated = await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
-      if (!updated) {
-        return c.json({ message: "Failed to update release state", ok: false }, 500);
-      }
-      
-      return c.text("Release stopped successfully", 200);
-    }
-  } catch (error) {
-    console.error("Error controlling release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.delete("/release/:releaseId", async (c) => {
-  try {
-    const releaseId = c.req.param("releaseId");
-    if (!isValidId(releaseId)) {
-      return c.json({ message: "Release not found", ok: false }, 404);
-    }
-    
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
-    
-    // Get the release to check its state
-    const release = await releaseHistory.getRelease(releaseId);
-    if (!release) {
-      return c.json({ message: "Release not found", ok: false }, 404);
-    }
-    
-    // According to OpenAPI spec, can only delete releases in "not_started" state
-    if (release.state !== "not_started") {
-      return c.json({ 
-        message: "Release has to be in a \"not_started\" state", 
-        ok: false 
-      }, 409);
-    }
-    
-    // Delete the release
-    const deleted = await releaseHistory.removeRelease(releaseId);
-    if (!deleted) {
-      return c.json({ message: "Release not found", ok: false }, 404);
-    }
-    
-    return c.text("Release deleted", 200);
-  } catch (error) {
-    console.error("Error deleting release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.get("/release/:releaseId/stage/:releaseStageId", async (c) => {
-  try {
-    const releaseId = c.req.param("releaseId");
-    const releaseStageId = c.req.param("releaseStageId");
-    
-    if (!isValidId(releaseId)) {
-      return c.json({ message: "Release stage not found", ok: false }, 404);
-    }
-    
-    // Get the release from storage
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
-    const release = await releaseHistory.getRelease(releaseId);
-    
-    if (!release) {
-      return c.json({ message: "Release not found", ok: false }, 404);
-    }
-    
-    // Find the specific stage within the release
-    const stage = release.stages.find(s => s.id === releaseStageId);
+    // Get the stage from storage
+    const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+    const stage = await stageStorage.get();
     
     if (!stage) {
-      return c.json({ message: "Release stage not found", ok: false }, 404);
+      return c.json({ message: "Stage not found", ok: false }, 404);
     }
     
     return c.json(stage, 200);
   } catch (error) {
-    console.error("Error getting release stage:", error);
+    console.error("Error getting stage:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
 
-api.post("/release/:releaseId/stage/:releaseStageId", async (c) => {
+api.post("/stage/:stageId", async (c) => {
   try {
-    const releaseId = c.req.param("releaseId");
-    const releaseStageId = c.req.param("releaseStageId");
+    const stageId = c.req.param("stageId");
     
-    if (!isValidId(releaseId)) {
-      return c.json({ message: "Release stage not found", ok: false }, 404);
+    if (!isValidStageId(stageId)) {
+      return c.json({ message: "Stage not found", ok: false }, 404);
     }
     
     const command = await c.req.text();
@@ -346,16 +372,24 @@ api.post("/release/:releaseId/stage/:releaseStageId", async (c) => {
       return c.json({ message: "Invalid command: must be 'approve' or 'deny'", ok: false }, 400);
     }
     
-    // TODO: Implement actual stage progression logic
-    
+    const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+    await stageStorage.progressStage(command);
+
+    const releaseId = (await stageStorage.get())?.releaseId;
+    if (!releaseId) {
+      return c.json({ message: "Stage not found", ok: false }, 404);
+    }
+    const releaseWorkflow = await c.env.RELEASE_WORKFLOW.get(releaseId);
+    releaseWorkflow.sendEvent({ type: `${stageId}-user-progess-command`, payload: command });
+
     return c.text("Stage progressed successfully", 200);
   } catch (error) {
-    console.error("Error progressing release stage:", error);
+    console.error("Error progressing stage:", error);
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
 
 app.route("/api", api);
 
-export { PlanStorage, ReleaseHistory };
+export { PlanStorage, ReleaseHistory, StageStorage, ReleaseWorkflow };
 export default app;

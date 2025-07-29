@@ -160,18 +160,18 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     const maxOrder = Math.max(...stages.map(s => s.order));
     // Insert the new stage before the last one
     const newStage: PlanStage = {
-      order: maxOrder - 1, // This will be the new second-to-last stage
+      order: maxOrder, // This will be the new second-to-last stage
       description: "",
-      target_percent: stages[maxOrder - 1].target_percent + 1, // Start at 1% higher than the previous stage
+      target_percent: (stages.find(s => s.order === maxOrder - 1)?.target_percent || 49) + 1, // Start at 1% higher than the previous stage
       soak_time: 60,
       auto_progress: false,
     };
 
     // Reorder all stages and ensure the last one is at 100%
-    const updatedStages = [...stages.slice(0, maxOrder), newStage, ...stages.slice(maxOrder)]
+    const updatedStages = [...stages.slice(0, -1), newStage, stages[stages.length - 1]]
       .map((stage, index) => ({
         ...stage,
-        order: index,
+        order: index + 1, // 1-based ordering
         target_percent: index === stages.length ? 100 : stage.target_percent, // Last stage (new length) is 100%
       }));
     
@@ -196,7 +196,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     // Reorder remaining stages and ensure last stage is 100%
     const reorderedStages = filteredStages.map((stage, index) => ({
       ...stage,
-      order: index,
+      order: index + 1, // 1-based ordering
     }));
     
     // Set the new last stage to 100%

@@ -91,6 +91,16 @@
   margin-bottom: 0;
 }
 
+.done-timestamps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.done-timestamps .timestamp-info {
+  margin-bottom: 0;
+}
+
 .release-state {
   padding: 0.25em 0.75em;
   border-radius: 1em;
@@ -114,9 +124,34 @@
   color: #7b1fa2;
 }
 
+.release-state.done_successful {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.release-state.done_failed {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.release-state.done_stopped_manually {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
 .release-state.failed {
   background-color: #ffebee;
   color: #d32f2f;
+}
+
+.completed-release-indicator {
+  padding: 0.25em 0.5em;
+  border-radius: 0.25em;
+  font-size: 0.75em;
+  font-weight: 500;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #bbdefb;
 }
 
 .release-details {
@@ -142,7 +177,6 @@
 
 .release-stage-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 0.75em;
   background-color: #f8f9fa;
@@ -153,7 +187,7 @@
 .stage-info {
   display: flex;
   gap: 1em;
-  align-items: center;
+  align-items: baseline;
   flex: 1;
 }
 
@@ -174,7 +208,7 @@
 .stage-soak {
   font-weight: 400;
   color: #666;
-  width: 3em;
+  width: 8em;
   flex-shrink: 0;
   font-family: 'Roboto Mono', monospace;
   font-size: 0.875em;
@@ -217,9 +251,29 @@
   color: #f57c00;
 }
 
+.stage-state.awaiting_approval {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
 .stage-state.running {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.stage-state.done_successful {
   background-color: #e8f5e9;
   color: #2e7d32;
+}
+
+.stage-state.done_failed {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.stage-state.done_cancelled {
+  background-color: #fff3e0;
+  color: #f57c00;
 }
 
 .stage-state.completed {
@@ -230,6 +284,14 @@
 .stage-state.failed {
   background-color: #ffebee;
   color: #d32f2f;
+}
+
+.stage-timing {
+  display: flex;
+  gap: 1em;
+  margin-top: 0.5em;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .stage-time {

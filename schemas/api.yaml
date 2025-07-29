@@ -146,6 +146,41 @@ paths:
                 $ref: "#/components/schemas/Release"
         404:
           description: No active release found
+    post:
+      summary: Control active release execution
+      description: Start or stop the active release
+      operationId: controlActiveRelease
+      tags:
+        - Release
+      requestBody:
+        required: true
+        content:
+          application/text:
+            schema:
+              type: string
+              enum:
+                - start
+                - stop
+      responses:
+        200:
+          description: start or stop was successful
+        404:
+          description: No active release found
+        400:
+          description: The provided command is not valid for the release in its current state
+    delete:
+      summary: Delete active release
+      description: Delete the active release if it is in 'not_started' state
+      operationId: deleteActiveRelease
+      tags:
+        - Release
+      responses:
+        200:
+          description: Release deleted
+        409:
+          description: Release has to be in a "not_started" state
+        404:
+          description: No active release found
   /release/{releaseId}:
     get:
       summary: Get release details
@@ -164,55 +199,15 @@ paths:
                 $ref: "#/components/schemas/Release"
         404:
           description: Release not found
-    post:
-      summary: Control release execution
-      description: Start or stop a release. Only one release can be active at a time
-      operationId: controlRelease
-      tags:
-        - Release
-      parameters:
-        - $ref: "#/components/parameters/releaseId"
-      requestBody:
-        required: true
-        content:
-          application/text:
-            schema:
-              type: string
-              enum:
-                - start
-                - stop
-      responses:
-        200:
-          description: start or stop was successful
-        404:
-          description: Release not found
-        400:
-          description: The provided command is not valid for the release in its current state
-    delete:
-      summary: Delete release
-      description: Delete a release that is in 'not_started' state
-      operationId: deleteRelease
-      tags:
-        - Release
-      parameters:
-        - $ref: "#/components/parameters/releaseId"
-      responses:
-        200:
-          description: Release deleted
-        409:
-          description: Release has to be in a "not_started" state
-        404:
-          description: Release not found
-  /release/{releaseId}/stage/{releaseStageId}:
+  /stage/{stageId}:
     get:
-      summary: Get release stage status
-      description: Get the current state of a specific stage within a release
-      operationId: getReleaseStage
+      summary: Get stage status
+      description: Get the current state of a specific stage
+      operationId: getStage
       tags:
-        - Release
+        - Stage
       parameters:
-        - $ref: "#/components/parameters/releaseId"
-        - $ref: "#/components/parameters/releaseStageId"
+        - $ref: "#/components/parameters/stageId"
       responses:
         200:
           description: Returns the Stage info
@@ -223,14 +218,13 @@ paths:
         404:
           description: Stage not found
     post:
-      summary: Progress release stage
-      description: Advance a stage if it is in the 'awaiting_approval' state
-      operationId: progressReleaseStage
+      summary: Progress stage
+      description: Advance a stage by approving or denying it
+      operationId: progressStage
       tags:
-        - Release
+        - Stage
       parameters:
-        - $ref: "#/components/parameters/releaseId"
-        - $ref: "#/components/parameters/releaseStageId"
+        - $ref: "#/components/parameters/stageId"
       requestBody:
         required: true
         content:
@@ -243,8 +237,8 @@ paths:
       responses:
         200:
           description: Successfully progressed the stage
-        409:
-          description: Stage has to be in a "awaiting_approval" state
+        400:
+          description: Invalid command
         404:
           description: Stage not found
 
@@ -254,8 +248,8 @@ components:
       type: http
       scheme: basic
   parameters:
-    releaseStageId:
-      name: releaseStageId
+    stageId:
+      name: stageId
       in: path
       required: true
       schema:
@@ -304,14 +298,18 @@ components:
       type: object
       readOnly: true
       example:
-        id: "b2a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
-        order: 0
+        id: "release-1a2b3c4d-order-2"
+        order: 2
+        releaseId: "1a2b3c4d"
         state: "queued"
         time_started: "2023-01-01T00:00:00Z"
         time_elapsed: 0
+        time_done: "2023-01-01T00:00:00Z"
+        logs: ""
       required:
         - id
         - order
+        - releaseId
         - state
         - time_started
         - time_elapsed
@@ -323,6 +321,9 @@ components:
         order:
           description: order of the stage in the release
           type: integer
+        releaseId:
+          description: id of the release
+          type: string
         state:
           description: state of the stage
           type: string
@@ -332,6 +333,8 @@ components:
             - running
             - done_failed
             - done_successful
+            - done_cancelled
+            - error
         time_started:
           type: string
           format: date-time
@@ -351,7 +354,9 @@ components:
         plan_record:
           $ref: "#/components/schemas/Plan"
         stages:
-          - $ref: "#/components/schemas/ReleaseStage"
+          type: array
+          items:
+            $ref: "#/components/schemas/StageId"
         time_started:
           type: string
           format: date-time
@@ -380,12 +385,13 @@ components:
             - done_stopped_manually
             - done_failed_slo
             - done_successful
+            - error
         plan_record:
           $ref: "#/components/schemas/Plan"
         stages:
           type: array
           items:
-            $ref: "#/components/schemas/ReleaseStage"
+            $ref: "#/components/schemas/StageId"
         time_created:
           type: string
           format: date-time
@@ -397,6 +403,17 @@ components:
         time_done:
           type: string
           format: date-time
+    StageId:
+      type: object
+      readOnly: true
+      required:
+        - id
+        - order
+      properties:
+        id:
+          type: string
+        order:
+          type: integer
     Plan:
       type: object
       example:

@@ -9,7 +9,7 @@
   },
   "migrations": [
     {
-      "new_sqlite_classes": ["PlanStorage", "ReleaseHistory"],
+      "new_sqlite_classes": ["PlanStorage", "ReleaseHistory", "StageStorage"],
       "tag": "v1",
     }
   ],
@@ -22,8 +22,22 @@
       {
         "name": "RELEASE_HISTORY",
         "class_name": "ReleaseHistory"
+      },
+      {
+        "name": "STAGE_STORAGE",
+        "class_name": "StageStorage"
       }
     ]
+  },
+  "workflows": [
+    {
+      "name": "release-workflow",
+      "binding": "RELEASE_WORKFLOW",
+      "class_name": "ReleaseWorkflow"
+    }
+  ],
+  "triggers": {
+    "crons": []
   },
   "assets": {
     "directory": "./dist/client/",

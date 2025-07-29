@@ -49,6 +49,27 @@ export class ReleaseHistory extends DurableObject<Env> {
       throw new Error(`Release ${id} not found`);
     }
     
+    const previousState = history.releases[releaseIndex].state;
+    const newState = release.state;
+    
+    // Handle alarm setup/cleanup based on state transitions
+    if (previousState !== 'running' && newState === 'running') {
+      // Starting a release - set up alarm
+      await this.ctx.storage.setAlarm(Date.now() + 1000);
+    } else if (previousState === 'running' && newState.startsWith('done_')) {
+      // Completing a release - set time_done if not already provided, calculate final elapsed time and clear alarm
+      if (!release.time_done) {
+        release.time_done = new Date().toISOString();
+      }
+      const currentRelease = history.releases[releaseIndex];
+      if (currentRelease.time_started && !release.time_elapsed) {
+        const startTime = new Date(currentRelease.time_started).getTime();
+        const endTime = release.time_done ? new Date(release.time_done).getTime() : Date.now();
+        release.time_elapsed = Math.floor((endTime - startTime) / 1000);
+      }
+      await this.ctx.storage.deleteAlarm();
+    }
+    
     history.releases[releaseIndex] = release;
     await this.saveReleaseHistory(history);
     return release;
@@ -64,9 +85,20 @@ export class ReleaseHistory extends DurableObject<Env> {
     const previousState = history.releases[releaseIndex].state;
     if (previousState === "not_started" && state === "running") {
       history.releases[releaseIndex].time_started = new Date().toISOString();
+      history.releases[releaseIndex].time_elapsed = 0;
+      // Set alarm to update elapsed time every second
+      await this.ctx.storage.setAlarm(Date.now() + 1000);
     }
     if (previousState === "running" && (state === "done_successful" || state === "done_stopped_manually" || state === "done_failed_slo")) {
       history.releases[releaseIndex].time_done = new Date().toISOString();
+      // Calculate final elapsed time
+      if (history.releases[releaseIndex].time_started) {
+        const startTime = new Date(history.releases[releaseIndex].time_started!).getTime();
+        const endTime = new Date().getTime();
+        history.releases[releaseIndex].time_elapsed = Math.floor((endTime - startTime) / 1000);
+      }
+      // Clear the alarm since release is done
+      await this.ctx.storage.deleteAlarm();
     }
     history.releases[releaseIndex].state = state;
     await this.saveReleaseHistory(history);
@@ -92,10 +124,32 @@ export class ReleaseHistory extends DurableObject<Env> {
 
   async getAllReleases(): Promise<Release[]> {
     const history = await this.getReleaseHistory();
-    const _history = [...history.releases];
-    // TODO: calculate time elapsed
-    _history.map(release => release.time_elapsed = 120);
-    return _history;
+    return [...history.releases];
+  }
+
+  // Alarm handler to update elapsed time for running releases
+  async alarm() {
+    const history = await this.getReleaseHistory();
+    let shouldContinueAlarm = false;
+    
+    // Find running releases and update their elapsed time
+    for (let i = 0; i < history.releases.length; i++) {
+      const release = history.releases[i];
+      if (release.state === 'running' && release.time_started) {
+        const startTime = new Date(release.time_started).getTime();
+        const now = Date.now();
+        history.releases[i].time_elapsed = Math.floor((now - startTime) / 1000);
+        shouldContinueAlarm = true;
+      }
+    }
+    
+    // Save updated history
+    await this.saveReleaseHistory(history);
+    
+    // Set next alarm if we still have running releases
+    if (shouldContinueAlarm) {
+      await this.ctx.storage.setAlarm(Date.now() + 1000);
+    }
   }
 
   async getRelease(id: string): Promise<Release | undefined> {

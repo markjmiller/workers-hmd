@@ -79,7 +79,7 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
         >
           {isLastStage ? '🔒' : '⋮⋮'}
         </div>
-        <span className="stage-number">{stage.order + 1}</span>
+        <span className="stage-number">{stage.order}</span>
       </div>
       
       <div className="col-percent">
