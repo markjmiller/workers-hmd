@@ -54,6 +54,16 @@ paths:
                 $ref: "#/components/schemas/Plan"
         400:
           description: Plan is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /release:
     get:
       summary: List releases
@@ -111,8 +121,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Release"
-        404:
-          description: No releases found
+        400:
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create release
       description: Create a new release. Only one release can be staged at a time
@@ -130,6 +150,16 @@ paths:
           description: A release is already staged
         400:
           description: Release cannot be created from the plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /release/active:
     get:
       summary: Get active release
@@ -164,10 +194,23 @@ paths:
       responses:
         200:
           description: start or stop was successful
-        404:
-          description: No active release found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Release started successfully"
         400:
           description: The provided command is not valid for the release in its current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: No active release found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete active release
       description: Delete the active release if it is in 'not_started' state
@@ -177,10 +220,30 @@ paths:
       responses:
         200:
           description: Release deleted
-        409:
-          description: Release has to be in a "not_started" state
+        400:
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         404:
           description: No active release found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        409:
+          description: Release has to be in a "not_started" state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /release/{releaseId}:
     get:
       summary: Get release details
@@ -291,6 +354,7 @@ components:
         soak_time:
           description: soak time in seconds
           type: integer
+          minimum: 10
         auto_progress:
           description: whether the stage automatically progresses or if it needs a human to manually progress it
           type: boolean
@@ -446,3 +510,20 @@ components:
       properties:
         value:
           type: string
+    Error:
+      type: object
+      description: Standard error response format
+      example:
+        message: "Invalid request"
+        ok: false
+      required:
+        - message
+        - ok
+      properties:
+        message:
+          type: string
+          description: Error message describing what went wrong
+        ok:
+          type: boolean
+          description: Always false for error responses
+          enum: [false]

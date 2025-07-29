@@ -1,6 +1,4 @@
 import { Hono } from "hono";
-
-
 import { prettyJSON } from "hono/pretty-json";
 import { validator } from "hono/validator";
 import type { components } from "../../types/api";
@@ -24,13 +22,20 @@ function getStageId(releaseId: string, stageOrder: string | number): string {
   return `release-${releaseId}-order-${stageOrder}`;
 }
 
-// function parseReleaseIdFromStageId(stageId: string): string {
-//   const match = stageId.match(/^release-([0-9a-fA-F]{8})-stage-[0-9]+$/);
-//   if (!match) {
-//     throw new Error("Invalid stage ID");
-//   }
-//   return match[1];
-// }
+// Helper functions to reduce duplication
+function getMainReleaseHistory(c: any) {
+  return c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+}
+
+function getMainPlanStorage(c: any) {
+  return c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main"));
+}
+
+function getStageStorage(c: any, stageId: string) {
+  return c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+}
+
+const VALID_STATES = ["not_started", "running", "done_successful", "done_stopped_manually", "done_failed_slo"];
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -54,7 +59,7 @@ const api = new Hono<{ Bindings: Cloudflare.Env }>();
 
 api.get("/plan", async (c) => {
   try {
-    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan();
+    const plan = await getMainPlanStorage(c).getPlan();
     return c.json<Plan>(plan, 200);
   } catch (error) {
     console.error("Error getting plan:", error);
@@ -71,7 +76,7 @@ api.post("/plan", validator("json", (value, c) => {
 }), async (c) => {
   try {
     const plan = c.req.valid("json");
-    const updatedPlan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).updatePlan(plan);
+    const updatedPlan = await getMainPlanStorage(c).updatePlan(plan);
     return c.json<Plan>(updatedPlan, 200);
   } catch (error) {
     console.error("Error updating plan:", error);
@@ -81,14 +86,12 @@ api.post("/plan", validator("json", (value, c) => {
 
 api.get("/release", async (c) => {
   try {
-    // Parse query parameters
     const limit = parseInt(c.req.query("limit") || "50");
     const offset = parseInt(c.req.query("offset") || "0");
     const since = c.req.query("since");
     const until = c.req.query("until");
     const state = c.req.query("state");
     
-    // Validate parameters
     if (limit < 1 || limit > 100) {
       return c.json({ message: "Limit must be between 1 and 100", ok: false }, 400);
     }
@@ -96,18 +99,15 @@ api.get("/release", async (c) => {
       return c.json({ message: "Offset must be non-negative", ok: false }, 400);
     }
     
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releaseHistory = getMainReleaseHistory(c);
     let releases = await releaseHistory.getAllReleases();
     
-    // Apply timestamp filters
     if (since) {
       const sinceDate = new Date(since);
       if (isNaN(sinceDate.getTime())) {
         return c.json({ message: "Invalid 'since' timestamp format", ok: false }, 400);
       }
-      releases = releases.filter(release => 
-        new Date(release.time_created) >= sinceDate
-      );
+      releases = releases.filter((release: Release) => new Date(release.time_created) >= sinceDate);
     }
     
     if (until) {
@@ -115,23 +115,17 @@ api.get("/release", async (c) => {
       if (isNaN(untilDate.getTime())) {
         return c.json({ message: "Invalid 'until' timestamp format", ok: false }, 400);
       }
-      releases = releases.filter(release => 
-        new Date(release.time_created) <= untilDate
-      );
+      releases = releases.filter((release: Release) => new Date(release.time_created) <= untilDate);
     }
     
-    // Apply state filter
     if (state) {
-      const validStates = ["not_started", "running", "done_successful", "done_stopped_manually", "done_failed_slo"];
-      if (!validStates.includes(state)) {
-        return c.json({ message: `Invalid state. Must be one of: ${validStates.join(", ")}`, ok: false }, 400);
+      if (!VALID_STATES.includes(state)) {
+        return c.json({ message: `Invalid state. Must be one of: ${VALID_STATES.join(", ")}`, ok: false }, 400);
       }
-      releases = releases.filter(release => release.state === state);
+      releases = releases.filter((release: Release) => release.state === state);
     }
     
-    // Apply pagination
     const paginatedReleases = releases.slice(offset, offset + limit);
-    
     return c.json(paginatedReleases, 200);
   } catch (error) {
     console.error("Error getting releases:", error);
@@ -141,16 +135,14 @@ api.get("/release", async (c) => {
 
 api.post("/release", async (c) => {
   try {
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releaseHistory = getMainReleaseHistory(c);
     
-    // Check if there's already an active release
     const hasActiveRelease = await releaseHistory.hasActiveRelease();
     if (hasActiveRelease) {
       return c.json({ message: "A release is already staged", ok: false }, 409);
     }
     
-    // Create release from current plan
-    const plan = await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main")).getPlan();
+    const plan = await getMainPlanStorage(c).getPlan();
     const releaseId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const currentTime = new Date().toISOString();
     
@@ -158,17 +150,16 @@ api.post("/release", async (c) => {
       id: releaseId,
       state: "not_started",
       plan_record: plan,
-      stages: plan.stages.map((stage) => ({ id: `release-${releaseId}-order-${stage.order}`, order: stage.order })),
+      stages: plan.stages.map((stage: any) => ({ id: `release-${releaseId}-order-${stage.order}`, order: stage.order })),
       time_created: currentTime,
       time_started: "",
       time_elapsed: 0,
       time_done: "",
     };
 
-    // Create stages for the release
     for (const planStage of plan.stages) {
       const stageId = getStageId(releaseId, planStage.order);
-      const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+      const stageStorage = getStageStorage(c, stageId);
       await stageStorage.initialize({
           id: stageId,
           order: planStage.order,
@@ -182,7 +173,6 @@ api.post("/release", async (c) => {
     }
     
     const createdRelease = await releaseHistory.createRelease(newRelease);
-
     return c.json(createdRelease, 200);
   } catch (error) {
     console.error("Error creating release:", error);
@@ -192,7 +182,7 @@ api.post("/release", async (c) => {
 
 api.get("/release/active", async (c) => {
   try {
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releaseHistory = getMainReleaseHistory(c);
     const activeRelease = await releaseHistory.getActiveRelease();
     
     if (!activeRelease) {
@@ -208,14 +198,13 @@ api.get("/release/active", async (c) => {
 
 api.post("/release/active", async (c) => {
   try {
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releaseHistory = getMainReleaseHistory(c);
     const activeRelease = await releaseHistory.getActiveRelease();
     
     if (!activeRelease) {
       return c.json({ message: "No active release found", ok: false }, 404);
     }
     
-    // According to the OpenAPI spec, the content type should be application/text
     const command = await c.req.text();
     
     if (command !== "start" && command !== "stop") {
@@ -252,22 +241,39 @@ api.post("/release/active", async (c) => {
         }, 400);
       }
 
+      const updateStages = async () => {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Update all non-completed stages to cancelled state
+        const allStages = activeRelease.plan_record.stages;
+        for (const stageInfo of allStages) {
+          const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(`release-${activeRelease.id}-order-${stageInfo.order}`));
+          const currentStage = await stageStorage.get();
+          // Only update stages that exist and are not already in a done state
+          if (currentStage && !currentStage.state.startsWith('done_')) {
+            await stageStorage.updateStageState("done_cancelled");
+            console.log(`🚫 Set stage ${stageInfo.order} to done_cancelled due to release stop`);
+          }
+        }
+      }
+
+      await updateStages();
+
       // TODO: there is a race condition here because the workflow might still be running
       //       we should be able to terminate the workflow, but that method isn't implemented
       //       yet. When it is, I think we can await workflow.terminate()
       //
-      // Update all non-completed stages to cancelled state
-      const allStages = activeRelease.plan_record.stages;
-      for (const stageInfo of allStages) {
-        const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(`release-${activeRelease.id}-order-${stageInfo.order}`));
-        const currentStage = await stageStorage.get();
-        // Only update stages that exist and are not already in a done state
-        if (currentStage && !currentStage.state.startsWith('done_')) {
-          await stageStorage.updateStageState("done_cancelled");
-          console.log(`🚫 Set stage ${stageInfo.order} to done_cancelled due to release stop`);
-        }
-      }
-      
+      //       For now, just wait for 5 seconds to ensure the workflow has had time to finish
+      //       then update the stages to cancelled state
+      //
+      c.executionCtx.waitUntil(
+        new Promise<void>((resolve) => {
+          setTimeout(async () => {
+            await updateStages();
+            resolve()
+          }, 5000)
+        })
+      );
+
       // Update release state to done_stopped_manually
       const updated = await releaseHistory.updateReleaseState(activeRelease.id, "done_stopped_manually");
 
@@ -285,15 +291,13 @@ api.post("/release/active", async (c) => {
 
 api.delete("/release/active", async (c) => {
   try {
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
-    
-    // Get the active release to check its state
+    const releaseHistory = getMainReleaseHistory(c);
     const activeRelease = await releaseHistory.getActiveRelease();
+    
     if (!activeRelease) {
       return c.json({ message: "No active release found", ok: false }, 404);
     }
     
-    // According to OpenAPI spec, can only delete releases in "not_started" state
     if (activeRelease.state !== "not_started") {
       return c.json({ 
         message: "Release has to be in a \"not_started\" state", 
@@ -301,7 +305,6 @@ api.delete("/release/active", async (c) => {
       }, 409);
     }
     
-    // Delete the active release
     const deleted = await releaseHistory.removeRelease(activeRelease.id);
     if (!deleted) {
       return c.json({ message: "Release not found", ok: false }, 404);
@@ -321,7 +324,7 @@ api.get("/release/:releaseId", async (c) => {
       return c.json({ message: "Release not found", ok: false }, 404);
     }
     
-    const releaseHistory = c.env.RELEASE_HISTORY.get(c.env.RELEASE_HISTORY.idFromName("main"));
+    const releaseHistory = getMainReleaseHistory(c);
     const release = await releaseHistory.getRelease(releaseId);
     
     if (!release) {
@@ -343,8 +346,7 @@ api.get("/stage/:stageId", async (c) => {
       return c.json({ message: "Stage not found", ok: false }, 404);
     }
     
-    // Get the stage from storage
-    const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+    const stageStorage = getStageStorage(c, stageId);
     const stage = await stageStorage.get();
     
     if (!stage) {
@@ -372,7 +374,7 @@ api.post("/stage/:stageId", async (c) => {
       return c.json({ message: "Invalid command: must be 'approve' or 'deny'", ok: false }, 400);
     }
     
-    const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+    const stageStorage = getStageStorage(c, stageId);
     await stageStorage.progressStage(command);
 
     const releaseId = (await stageStorage.get())?.releaseId;

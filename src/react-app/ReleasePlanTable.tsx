@@ -64,8 +64,8 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
       const isLastStage = currentStage.order === maxOrder;
       
       // Check soak time validation
-      if (currentStage.soak_time <= 0) {
-        errors[`${currentStage.order}_soak`] = 'Soak time must be greater than 0';
+      if (currentStage.soak_time < 10) {
+        errors[`${currentStage.order}_soak`] = 'Soak time must be at least 10 seconds';
       }
       
       // Check if non-final stage has 100% target

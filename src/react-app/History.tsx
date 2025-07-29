@@ -344,6 +344,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                                 releaseStage={executedStage}
                                 showStatus={true}
                                 showSoakTime={true}
+                                disableActions={true}
                               />
                             );
                           })}

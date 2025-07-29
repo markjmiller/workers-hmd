@@ -11,6 +11,7 @@ interface StageItemProps {
   showSoakTime?: boolean;
   releaseState?: string;
   onError?: (error: string) => void;
+  disableActions?: boolean; // Disable approve/cancel buttons (e.g., for History tab)
 }
 
 // Helper function to format stage state display names
@@ -49,7 +50,8 @@ export const StageItem: React.FC<StageItemProps> = ({
   showStatus = false,
   showSoakTime = false,
   releaseState,
-  onError
+  onError,
+  disableActions = false
 }) => {
   const [isProgressing, setIsProgressing] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
@@ -129,7 +131,8 @@ export const StageItem: React.FC<StageItemProps> = ({
               {!planStage.auto_progress && 
                releaseStage.state === 'awaiting_approval' && 
                releaseState !== 'done_stopped_manually' && 
-               !releaseState?.startsWith('done_') && (
+               !releaseState?.startsWith('done_') && 
+               !disableActions && (
                 <div style={{ display: 'flex', gap: '0.5em' }}>
                   <button 
                     className="nice-button"
