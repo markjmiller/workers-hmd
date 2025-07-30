@@ -252,6 +252,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     return {
       stages: [...stages].sort((a, b) => a.order - b.order),
       slos,
+      worker_name: initialPlan.worker_name,
     };
   }, [stages, slos]);
 

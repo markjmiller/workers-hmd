@@ -380,8 +380,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           
           {workerInfo && (
             <div className="card-info">
-              <p><strong>Worker:</strong> {workerInfo.name}</p>
-              <p><strong>Account ID:</strong> {workerInfo.accountId}</p>
+              <p style={{ fontSize: '1em', margin: '0' }}>{workerInfo.name}</p>
             </div>
           )}
           

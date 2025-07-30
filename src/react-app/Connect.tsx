@@ -136,7 +136,7 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
         <div className="card-large">
           {/* Form Header */}
           <div className="form-header">
-            <h3 className="form-title">
+            <h3 className="form-title" style={{ margin: '0' }}>
               <i className="fas fa-plug icon-primary"></i>
               Connect to Cloudflare Worker
             </h3>

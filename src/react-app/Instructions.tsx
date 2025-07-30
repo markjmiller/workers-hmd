@@ -33,7 +33,7 @@ export const Instructions: React.FC = () => {
           e.currentTarget.style.backgroundColor = '#f8f9fa';
         }}
       >
-        <span>Instructions</span>
+        <span>📝 Instructions</span>
         <i 
           className={`fas fa-chevron-${isExpanded ? 'up' : 'down'}`}
           style={{ fontSize: '0.8rem', transition: 'transform 0.2s ease' }}

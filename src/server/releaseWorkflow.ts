@@ -1,7 +1,17 @@
 import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+import { Cloudflare as cf } from 'cloudflare';
+import { components } from '../../types/api';
+import { ReleaseHistory } from './releaseHistory';
+import { StageStorage } from './stage';
+
+type StageId = components["schemas"]["StageId"];
+type PlanStage = components["schemas"]["PlanStage"];
+type Release = components["schemas"]["Release"];
 
 export type ReleaseWorkflowParams = {
   releaseId: string;
+  accountId: string;
+  apiToken: string;
 };
 
 export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseWorkflowParams> {
@@ -14,20 +24,28 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
   }
 
   private async updateStagesState(releaseId: string, stages: any[], state: "done_cancelled" | "done_failed", excludeCompleted = true) {
-    for (const stage of stages) {
-      const stageStorage = this.getStageStorage(releaseId, stage.order);
+    for (const planStage of stages) {
+      const stageStorage = this.getStageStorage(releaseId, planStage.order);
       const currentStageData = await stageStorage.get();
       
       if (currentStageData && (!excludeCompleted || !currentStageData.state.startsWith('done_'))) {
         await stageStorage.updateStageState(state);
-        console.log(`🚫 Set stage ${stage.order} to ${state}`);
+        console.log(`🚫 Set stage ${planStage.order} to ${state}`);
       }
     }
   }
 
+  private client: cf | undefined;
+  private accountId: string | undefined;
+
   async run(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep) {
-    const { releaseId } = event.payload;
-    console.log(`🚀 Starting workflow for release: ${releaseId}`);
+    const { releaseId, accountId, apiToken } = event.payload;
+
+    this.client = new cf({
+      apiToken: apiToken,
+    });
+
+    this.accountId = accountId;
 
     try {
       const releaseHistory = this.getReleaseHistory();
@@ -37,8 +55,14 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
         console.error(`❌ Release ${releaseId} not found!`);
         return;
       }
-      
-      console.log(`📋 Found release with ${release.stages.length} stages`);
+
+      console.log(`
+        🚀 Starting workflow for release: ${releaseId}
+        ----------
+        Worker Name: ${release.plan_record.worker_name}
+        Account ID: ${this.accountId}
+        ----------
+      `);
 
       await step.do("update release state to running", async () => {
         await releaseHistory.updateReleaseState(releaseId, "running");
@@ -58,17 +82,17 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
     }
   }
 
-  private async processStages(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep, release: any, releaseHistory: any) {
+  private async processStages(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep, release: Release, releaseHistory: DurableObjectStub<ReleaseHistory>) {
     const { releaseId } = event.payload;
     
     const updateRemainingStages = async (failureState: "done_cancelled" | "done_failed", currentStageOrder: number) => {
-      const remainingStages = release.plan_record.stages.filter((s: any) => s.order > currentStageOrder);
+      const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order > currentStageOrder);
       console.log(`🔍 Found ${remainingStages.length} remaining stages to update after stage ${currentStageOrder}`);
       await this.updateStagesState(releaseId, remainingStages, failureState);
     };
 
     for (const stage of release.stages) {
-      const stagePlan = release.plan_record.stages.find((s: any) => s.order === stage.order);
+      const stagePlan = release.plan_record.stages.find((s: PlanStage) => s.order === stage.order);
       if (!stagePlan) {
         console.error(`❌ No plan found for stage ${stage.id}`);
         continue;
@@ -79,6 +103,7 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
 
       await step.do(`${stage.id} - start`, async () => {
         await stageStorage.updateStageState("running");
+        await this.setDeploymentTarget(release.plan_record.worker_name, stagePlan.target_percent, release.old_version, release.new_version);
       });
 
       await this.processStageSoak(step, stage, stagePlan);
@@ -94,7 +119,7 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
     }
   }
 
-  private async processStageSoak(step: WorkflowStep, stage: any, stagePlan: any) {
+  private async processStageSoak(step: WorkflowStep, stage: StageId, stagePlan: PlanStage) {
     for (let i = 0; i < stagePlan.soak_time; i++) {
       // Check if release was stopped
       const release = await this.getReleaseHistory().getActiveRelease();
@@ -108,18 +133,19 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
 
   private async handleStageApproval(
     step: WorkflowStep, 
-    stage: any, 
-    stagePlan: any, 
-    release: any, 
-    stageStorage: any, 
+    stage: StageId, 
+    stagePlan: PlanStage, 
+    release: Release, 
+    stageStorage: DurableObjectStub<StageStorage>, 
     updateRemainingStages: (state: "done_cancelled" | "done_failed", order: number) => Promise<void>,
-    releaseHistory: any,
+    releaseHistory: DurableObjectStub<ReleaseHistory>,
     releaseId: string
   ): Promise<'continue' | 'exit'> {
-    const isLastStage = stage.order === Math.max(...release.plan_record.stages.map((s: any) => s.order));
+    const isLastStage = stage.order === Math.max(...release.plan_record.stages.map((s: PlanStage) => s.order));
     
     if (!stagePlan.auto_progress && !isLastStage) {
       await stageStorage.updateStageState("awaiting_approval");
+      console.log(`⏳ Stage ${stage.order} awaiting approval`);
       const waitForApproval = await step.waitForEvent(`Waiting for stage ${stage.id} approval`, {
         type: `${stage.id}-user-progess-command`
       });
@@ -158,5 +184,30 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
     } catch (updateError) {
       console.error(`Failed to update release state to failed:`, updateError);
     }
+  }
+
+  private async setDeploymentTarget(worker_name: string, target_percent: number, old_version_id: string, new_version_id: string) {
+    console.log(`
+      === CF DEPLOYMENT API REQUEST ===
+      Account: ${this.accountId}
+      Worker: ${worker_name}
+      Old Version: ${old_version_id} (${100 - target_percent}%)
+      New Version: ${new_version_id} (${target_percent}%)
+      ================================
+    `);
+    // client.workers.scripts.deployments.create(worker_name, {
+    //   account_id: accountId,
+    //   strategy: "percentage",
+    //   versions: [
+    //     {
+    //       percentage: target_percent,
+    //       version_id: new_version_id,
+    //     },
+    //     {
+    //       percentage: 100 - target_percent,
+    //       version_id: old_version_id,
+    //     },
+    //   ],
+    // });
   }
 }

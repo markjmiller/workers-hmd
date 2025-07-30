@@ -10,12 +10,8 @@
 }
 
 .card-large {
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
   padding: 2rem;
   max-width: 500px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .card-connected {
@@ -28,7 +24,7 @@
 }
 
 .card-info {
-  text-align: left;
+  text-align: center;
   margin-bottom: 1rem;
   padding: 0.75rem;
   background-color: #f8f9fa;

@@ -466,7 +466,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/text": "start" | "stop";
+                "application/json": {
+                    /**
+                     * @description The command to execute on the active release
+                     * @enum {string}
+                     */
+                    command: "start" | "stop";
+                    /** @description Cloudflare Account ID */
+                    account_id?: string;
+                    /** @description Cloudflare API Token for authentication */
+                    api_token?: string;
+                };
             };
         };
         responses: {

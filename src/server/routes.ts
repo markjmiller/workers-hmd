@@ -208,9 +208,10 @@ api.post("/release/active", async (c) => {
       return c.json({ message: "No active release found", ok: false }, 404);
     }
     
-    const command = await c.req.text();
+    const requestBody = await c.req.json();
+    const { command, account_id, api_token } = requestBody;
     
-    if (command !== "start" && command !== "stop") {
+    if (!command || (command !== "start" && command !== "stop")) {
       return c.json({ message: "Invalid command: must be 'start' or 'stop'", ok: false }, 400);
     }
 
@@ -227,7 +228,7 @@ api.post("/release/active", async (c) => {
 
       const releaseWorkflow = await c.env.RELEASE_WORKFLOW.create({
         id: activeReleaseId,
-        params: { releaseId: activeReleaseId }
+        params: { releaseId: activeReleaseId, accountId: account_id, apiToken: api_token }
       });
       
       await releaseHistory.updateReleaseState(activeReleaseId, "running");

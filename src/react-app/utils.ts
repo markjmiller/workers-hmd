@@ -93,16 +93,34 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: data ? JSON.stringify(data) : undefined
     }),
-  startRelease: () => apiRequest('/api/release/active', { 
-    method: 'POST', 
-    headers: { 'Content-Type': 'text/plain' },
-    body: 'start' 
-  }),
-  stopRelease: () => apiRequest('/api/release/active', { 
-    method: 'POST', 
-    headers: { 'Content-Type': 'text/plain' },
-    body: 'stop' 
-  }),
+  startRelease: () => {
+    const workerConnectionData = sessionStorage.getItem('workerConnection');
+    const connection = workerConnectionData ? JSON.parse(workerConnectionData) : {};
+    
+    return apiRequest('/api/release/active', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'start',
+        account_id: connection.accountId || '',
+        api_token: connection.apiToken || ''
+      })
+    });
+  },
+  stopRelease: () => {
+    const workerConnectionData = sessionStorage.getItem('workerConnection');
+    const connection = workerConnectionData ? JSON.parse(workerConnectionData) : {};
+    
+    return apiRequest('/api/release/active', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'stop',
+        account_id: connection.accountId || '',
+        api_token: ''
+      })
+    });
+  },
   deleteActiveRelease: () => apiRequest('/api/release/active', { method: 'DELETE' }),
   getReleaseHistory: (params: URLSearchParams) => apiRequest(`/api/release?${params}`),
 

@@ -186,12 +186,24 @@ paths:
       requestBody:
         required: true
         content:
-          application/text:
+          application/json:
             schema:
-              type: string
-              enum:
-                - start
-                - stop
+              type: object
+              required:
+                - command
+              properties:
+                command:
+                  type: string
+                  enum:
+                    - start
+                    - stop
+                  description: The command to execute on the active release
+                account_id:
+                  type: string
+                  description: Cloudflare Account ID
+                api_token:
+                  type: string
+                  description: Cloudflare API Token for authentication
       responses:
         200:
           description: start or stop was successful
