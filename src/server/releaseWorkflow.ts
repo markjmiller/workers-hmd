@@ -38,30 +38,32 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
   private client: cf | undefined;
   private accountId: string | undefined;
 
-  async run(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep) {
+  async run(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep): Promise<void> {
     const { releaseId, accountId, apiToken } = event.payload;
-
-    this.client = new cf({
-      apiToken: apiToken,
-    });
-
-    this.accountId = accountId;
-
+    const releaseHistory = this.env.RELEASE_HISTORY.get(this.env.RELEASE_HISTORY.idFromName("main"));
+    
+    let release: Release | undefined;
+    
     try {
-      const releaseHistory = this.getReleaseHistory();
-      const release = await releaseHistory.getRelease(releaseId);
+      release = await releaseHistory.getRelease(releaseId);
       
       if (!release) {
         console.error(`❌ Release ${releaseId} not found!`);
         return;
       }
 
+      this.client = new cf({
+        apiToken: apiToken,
+      });
+
+      this.accountId = accountId;
+
       console.log(`
-        🚀 Starting workflow for release: ${releaseId}
-        ----------
-        Worker Name: ${release.plan_record.worker_name}
-        Account ID: ${this.accountId}
-        ----------
+🚀 Starting release: ${releaseId}
+----------
+Worker Name: ${release.plan_record.worker_name}
+Account ID: ${this.accountId}
+----------
       `);
 
       await step.do("update release state to running", async () => {
@@ -74,10 +76,15 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
         await releaseHistory.updateReleaseState(releaseId, "done_successful");
         console.log(`🎉 Release ${releaseId} completed successfully`);
       });
+
+      await this.finishDeployment(releaseId, release.plan_record.worker_name, release.new_version);
       
     } catch (error) {
       console.error(`💥 Workflow error for release ${releaseId}:`, error);
       await this.handleWorkflowError(releaseId);
+      if (release) {
+        await this.revertDeployment(releaseId, release.plan_record.worker_name, release.old_version);
+      }
       throw error;
     }
   }
@@ -103,7 +110,7 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
 
       await step.do(`${stage.id} - start`, async () => {
         await stageStorage.updateStageState("running");
-        await this.setDeploymentTarget(release.plan_record.worker_name, stagePlan.target_percent, release.old_version, release.new_version);
+        await this.setDeploymentTarget(releaseId, release.plan_record.worker_name, stagePlan.target_percent, release.old_version, release.new_version);
       });
 
       await this.processStageSoak(step, stage, stagePlan);
@@ -122,7 +129,8 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
   private async processStageSoak(step: WorkflowStep, stage: StageId, stagePlan: PlanStage) {
     for (let i = 0; i < stagePlan.soak_time; i++) {
       // Check if release was stopped
-      const release = await this.getReleaseHistory().getActiveRelease();
+      const releaseHistory = this.getReleaseHistory();
+      const release = await releaseHistory.getActiveRelease();
       if (release?.state !== 'running') {
         return;
       }
@@ -147,7 +155,7 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
       await stageStorage.updateStageState("awaiting_approval");
       console.log(`⏳ Stage ${stage.order} awaiting approval`);
       const waitForApproval = await step.waitForEvent(`Waiting for stage ${stage.id} approval`, {
-        type: `${stage.id}-user-progess-command`
+        type: `${stage.id}-user-progress-command`
       });
       
       if (waitForApproval.payload === "approve") {
@@ -186,28 +194,77 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
     }
   }
 
-  private async setDeploymentTarget(worker_name: string, target_percent: number, old_version_id: string, new_version_id: string) {
+  private async setDeploymentTarget(releaseId: string, worker_name: string, target_percent: number, old_version_id: string, new_version_id: string) {
     console.log(`
-      === CF DEPLOYMENT API REQUEST ===
-      Account: ${this.accountId}
-      Worker: ${worker_name}
-      Old Version: ${old_version_id} (${100 - target_percent}%)
-      New Version: ${new_version_id} (${target_percent}%)
-      ================================
+=== CF DEPLOYMENT API REQUEST ===
+Account: ${this.accountId}
+Worker: ${worker_name}
+Old Version: ${old_version_id} (${100 - target_percent}%)
+New Version: ${new_version_id} (${target_percent}%)
+================================
     `);
-    // client.workers.scripts.deployments.create(worker_name, {
-    //   account_id: accountId,
-    //   strategy: "percentage",
-    //   versions: [
-    //     {
-    //       percentage: target_percent,
-    //       version_id: new_version_id,
-    //     },
-    //     {
-    //       percentage: 100 - target_percent,
-    //       version_id: old_version_id,
-    //     },
-    //   ],
-    // });
+    this.client!.workers.scripts.deployments.create(worker_name, {
+      account_id: this.accountId!,
+      strategy: "percentage",
+      versions: [
+          {
+            percentage: target_percent,
+            version_id: new_version_id,
+          },
+          {
+            percentage: 100 - target_percent,
+            version_id: old_version_id,
+          },
+        ],
+        annotations: {
+          "workers/message": `Workers HMD Release ${releaseId} - in progress`,
+        },
+      });
+  }
+
+  private async finishDeployment(releaseId: string, worker_name: string, new_version_id: string) {
+    console.log(`
+=== CF DEPLOYMENT API REQUEST ===
+Account: ${this.accountId}
+Worker: ${worker_name}
+Finishing deployment with new version: ${new_version_id}
+================================
+    `);
+    this.client!.workers.scripts.deployments.create(worker_name, {
+      account_id: this.accountId!,
+      strategy: "percentage",
+      versions: [
+        {
+          percentage: 100,
+          version_id: new_version_id,
+        },
+      ],
+      annotations: {
+        "workers/message": `Workers HMD Release ${releaseId} - complete`,
+      },
+    });
+  }
+
+  private async revertDeployment(releaseId: string, worker_name: string, old_version_id: string) {
+    console.log(`
+=== CF DEPLOYMENT API REQUEST ===
+Account: ${this.accountId}
+Worker: ${worker_name}
+Reverting to old version: ${old_version_id}
+================================
+    `);
+    this.client!.workers.scripts.deployments.create(worker_name, {
+      account_id: this.accountId!,
+      strategy: "percentage",
+      versions: [
+        {
+          percentage: 100,
+          version_id: old_version_id,
+        },
+      ],
+      annotations: {
+        "workers/message": `Workers HMD Release ${releaseId} - reverted`,
+      },
+    });
   }
 }

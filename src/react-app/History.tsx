@@ -265,10 +265,10 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                           <span><strong>Worker:</strong> {release.plan_record.worker_name}</span>
                         )}
                         {release.old_version && (
-                          <span><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.old_version)}</span></span>
+                          <span><strong>Old version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.old_version)}</span></span>
                         )}
                         {release.new_version && (
-                          <span><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.new_version)}</span></span>
+                          <span><strong>New version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.new_version)}</span></span>
                         )}
                       </div>
                     </div>

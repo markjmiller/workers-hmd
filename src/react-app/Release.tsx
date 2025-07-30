@@ -186,7 +186,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
               } else if (activeDeployment.versions.length > 1) {
                 // Multiple versions - split deployment
                 const versionSummary = activeDeployment.versions
-                  .map((v: any) => `${v.version_id.substring(0, 8)}... (${v.percentage}%)`)
+                  .map((v: any) => `${v.version_id.substring(0, 8)} (${v.percentage}%)`)
                   .join(' and ');
                 setDeploymentError(`There's already an active split deployment between ${versionSummary}`);
               }
@@ -574,7 +574,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           {/* Deployment Status */}
           {deploymentError ? (
             <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #ffcccc', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', color: '#d32f2f', fontSize: '1rem' }}>⚠️ Cannot Create Release</h4>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#d32f2f', fontSize: '1rem' }}>⚠️ Cannot create release</h4>
               <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>{deploymentError}</p>
               <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#666' }}>Please resolve the split deployment before creating a new release.</p>
             </div>
@@ -723,13 +723,13 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
               </div>
             )}
             {activeRelease.old_version && (
-              <span style={{ fontSize: '0.875em' }}><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.old_version)}</span></span>
+              <span style={{ fontSize: '0.875em' }}><strong>Current version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.old_version)}</span></span>
             )}
             {activeRelease.new_version && (
-              <span style={{ fontSize: '0.875em' }}><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.new_version)}</span></span>
+              <span style={{ fontSize: '0.875em' }}><strong>New version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.new_version)}</span></span>
             )}
           </div>
-          <div className="release-timestamp" style={{ marginLeft: '0.5em' }}>
+          <div className="release-timestamp">
             {activeRelease.state === 'not_started' && activeRelease.time_created && (
               <span className="timestamp-info">
                 Created: {new Date(activeRelease.time_created).toLocaleString()}

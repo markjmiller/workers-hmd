@@ -387,7 +387,7 @@ api.post("/stage/:stageId", async (c) => {
       return c.json({ message: "Stage not found", ok: false }, 404);
     }
     const releaseWorkflow = await c.env.RELEASE_WORKFLOW.get(releaseId);
-    releaseWorkflow.sendEvent({ type: `${stageId}-user-progess-command`, payload: command });
+    releaseWorkflow.sendEvent({ type: `${stageId}-user-progress-command`, payload: command });
 
     return c.text("Stage progressed successfully", 200);
   } catch (error) {
