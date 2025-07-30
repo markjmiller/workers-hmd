@@ -246,47 +246,13 @@ api.post("/release/active", async (c) => {
         }, 400);
       }
 
-      const updateStages = async () => {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        // Update all non-completed stages to cancelled state
-        const allStages = activeRelease.plan_record.stages;
-        for (const stageInfo of allStages) {
-          const stageStorage = c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(`release-${activeRelease.id}-order-${stageInfo.order}`));
-          const currentStage = await stageStorage.get();
-          // Only update stages that exist and are not already in a done state
-          if (currentStage && !currentStage.state.startsWith('done_')) {
-            await stageStorage.updateStageState("done_cancelled");
-            console.log(`🚫 Set stage ${stageInfo.order} to done_cancelled due to release stop`);
-          }
-        }
-      }
-
-      await updateStages();
-
-      // TODO: there is a race condition here because the workflow might still be running
-      //       we should be able to terminate the workflow, but that method isn't implemented
-      //       yet. When it is, I think we can await workflow.terminate()
-      //
-      //       For now, just wait for 5 seconds to ensure the workflow has had time to finish
-      //       then update the stages to cancelled state
-      //
-      c.executionCtx.waitUntil(
-        new Promise<void>((resolve) => {
-          setTimeout(async () => {
-            await updateStages();
-            resolve()
-          }, 5000)
-        })
-      );
-
-      // Update release state to done_stopped_manually
-      const updated = await releaseHistory.updateReleaseState(activeRelease.id, "done_stopped_manually");
-
-      if (!updated) {
-        return c.json({ message: "Failed to update release state", ok: false }, 500);
-      }
+      // This acts as a signal in the workflow to stop the release
+      // It would probably be better to terminate the workflow and have
+      // Cleanup logic up here. However, terminate doesn't seem to
+      // be implemented in miniflare yet
+      await releaseHistory.updateReleaseState(activeRelease.id, "done_stopped_manually");
       
-      return c.text("Release stopped successfully", 200);
+      return c.text("Release stopping async", 200);
     }
   } catch (error) {
     console.error("Error controlling active release:", error);
