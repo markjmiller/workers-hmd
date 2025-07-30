@@ -4,6 +4,7 @@ import { useState } from "react";
 import "./App.css";
 import "./ReleasePlanTable.css";
 import { Plan } from "./Plan";
+import { Instructions } from "./Instructions";
 
 function App() {
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -20,8 +21,14 @@ function App() {
   return (
     <>
       <header className="app-header">
-        <h1 className="app-title">Workers HMD</h1>
-        <p className="app-subtitle">Health Mediated Deployments for <a href="https://workers.cloudflare.com/" target="_blank">Cloudflare Workers</a></p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25em' }}>
+          <img src="/workers-icon.svg" alt="Cloudflare Workers Logo" style={{ height: '2rem', width: 'auto' }} />
+          <h1 className="app-title">Workers HMD</h1>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <p className="app-subtitle">Health Mediated Deployments for <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener noreferrer" className="help-link">Cloudflare Workers <i className="fas fa-external-link-alt" style={{ marginRight: '0.5rem' }}></i></a></p>
+          <small style={{ backgroundColor: '#ffd700', padding: '0.5em', borderRadius: '4px', color: '#333' }}><i className="fas fa-exclamation-triangle" style={{ marginRight: '0.5em' }}></i>This is a demo. Please don't use it for production!</small>
+        </div>
       </header>
       
       <main>
@@ -41,7 +48,10 @@ function App() {
         )}
         
         {!globalError && (
-          <Plan onError={handleGlobalError} />
+          <>
+            <Instructions />
+            <Plan onError={handleGlobalError} />
+          </>
         )}
       </main>
     </>

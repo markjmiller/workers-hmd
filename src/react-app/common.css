@@ -1,0 +1,307 @@
+/* Common reusable UI component styles */
+
+/* Card Components */
+.card {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-large {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 500px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-connected {
+  background-color: #f8f9fa;
+  border: 2px solid #28a745;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-info {
+  text-align: left;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+}
+
+/* Form Components */
+.form-container {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.form-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.form-title {
+  margin: 0;
+  color: #495057;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-field {
+  margin-bottom: 1.5rem;
+}
+
+.form-field-large {
+  margin-bottom: 2rem;
+}
+
+.form-label {
+  margin-bottom: 0.5rem;
+  color: #495057;
+  font-size: 0.95rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background-color: #fff;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.form-input-mono {
+  font-family: monospace;
+}
+
+.form-input-text {
+  color: #212529;
+}
+
+/* Help Text Components */
+.help-text-warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.help-text-info {
+  background-color: #d1ecf1;
+  border: 1px solid #bee5eb;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.help-text-general {
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.help-link {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.help-warning-content {
+  color: #856404;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Status Components */
+.status-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.status-icon {
+  background-color: #28a745;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.75rem;
+  font-size: 14px;
+}
+
+.status-title {
+  margin: 0;
+  color: #28a745;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-detail-text {
+  color: #495057;
+  font-size: 0.95rem;
+}
+
+.status-detail-value {
+  font-family: monospace;
+  margin-left: 0.5rem;
+}
+
+.status-detail-value-primary {
+  color: #007bff;
+}
+
+.status-detail-value-secondary {
+  color: #6c757d;
+}
+
+/* Icon Components */
+.icon-primary {
+  color: #007bff;
+}
+
+.icon-secondary {
+  color: #6c757d;
+  width: 16px;
+}
+
+/* Button Extensions */
+.button-full-width {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: end;
+}
+
+/* Danger/Red Button Styles */
+.button-danger,
+.delete-release-button,
+.stop-release-button {
+  background-color: #d32f2f !important;
+  color: white !important;
+}
+
+.button-danger:hover:not(:disabled),
+.delete-release-button:hover:not(:disabled),
+.stop-release-button:hover:not(:disabled) {
+  background-color: #c62828 !important;
+}
+
+.button-danger:disabled,
+.delete-release-button:disabled,
+.stop-release-button:disabled {
+  background-color: #ffcdd2 !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* History Clear Button - Make it red instead of gray */
+.clear-btn {
+  background-color: #d32f2f !important;
+  color: white !important;
+}
+
+.clear-btn:hover {
+  background-color: #c62828 !important;
+}
+
+/* Utility Classes */
+.center-content {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.text-mono {
+  font-family: monospace;
+}
+
+.text-primary {
+  color: #007bff;
+}
+
+.text-secondary {
+  color: #6c757d;
+}
+
+.text-success {
+  color: #28a745;
+}
+
+.gap-small {
+  gap: 0.5rem;
+}
+
+.gap-medium {
+  gap: 0.75rem;
+}
+
+.margin-bottom-small {
+  margin-bottom: 0.5rem;
+}
+
+.margin-bottom-medium {
+  margin-bottom: 1rem;
+}
+
+.margin-bottom-large {
+  margin-bottom: 1.5rem;
+}
+
+.margin-bottom-xl {
+  margin-bottom: 2rem;
+}

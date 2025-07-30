@@ -142,6 +142,10 @@ api.post("/release", async (c) => {
       return c.json({ message: "A release is already staged", ok: false }, 409);
     }
     
+    // Parse request body to get version information
+    const requestBody = await c.req.json().catch(() => ({}));
+    const { old_version, new_version } = requestBody;
+    
     const plan = await getMainPlanStorage(c).getPlan();
     const releaseId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const currentTime = new Date().toISOString();
@@ -150,6 +154,8 @@ api.post("/release", async (c) => {
       id: releaseId,
       state: "not_started",
       plan_record: plan,
+      old_version: old_version || "",
+      new_version: new_version || "",
       stages: plan.stages.map((stage: any) => ({ id: `release-${releaseId}-order-${stage.order}`, order: stage.order })),
       time_created: currentTime,
       time_started: "",

@@ -418,6 +418,8 @@ components:
         state: "not_started"
         plan_record:
           $ref: "#/components/schemas/Plan"
+        old_version: "fa2c3d4e5a6a1b2d3d5e5f6a1b2c3d5"
+        new_version: "e1a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5"
         stages:
           type: array
           items:
@@ -435,6 +437,8 @@ components:
         - state
         - plan_record
         - stages
+        - old_version
+        - new_version
         - time_created
         - time_started
         - time_elapsed
@@ -453,6 +457,10 @@ components:
             - error
         plan_record:
           $ref: "#/components/schemas/Plan"
+        old_version:
+          type: string
+        new_version:
+          type: string
         stages:
           type: array
           items:
@@ -486,9 +494,11 @@ components:
           - $ref: "#/components/schemas/PlanStage"
         slos:
           - $ref: "#/components/schemas/SLO"
+        worker_name: "my-worker"
       required:
         - stages
         - slos
+        - worker_name
       properties:
         stages:
           type: array
@@ -502,6 +512,8 @@ components:
           type: string
           format: date-time
           readOnly: true
+        worker_name:
+          type: string
     SLO:
       type: object
       example:

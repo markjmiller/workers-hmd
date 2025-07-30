@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Release } from './Release';
 import { History } from './History';
+import { Connect } from './Connect';
 import { api } from './utils';
 import './AppTabs.css';
 import type { components } from "../../types/api";
@@ -14,9 +15,10 @@ interface AppTabsProps {
 export const AppTabs: React.FC<AppTabsProps> = ({
   planEditor,
 }) => {
-  const [activeTab, setActiveTab] = useState<'plan' | 'release' | 'history'>('plan');
+  const [activeTab, setActiveTab] = useState<'connect' | 'plan' | 'release' | 'history'>('connect');
   const [hasActiveRelease, setHasActiveRelease] = useState<boolean>(false);
   const [activeReleaseState, setActiveReleaseState] = useState<string | null>(null);
+  const [isWorkerConnected, setIsWorkerConnected] = useState<boolean>(false);
   const hasActiveReleaseRef = useRef<boolean>(false);
 
   // Check for active release function
@@ -30,10 +32,7 @@ export const AppTabs: React.FC<AppTabsProps> = ({
         hasActiveReleaseRef.current = true;
         setHasActiveRelease(true);
         setActiveReleaseState(release.state);
-        // Auto-open Release tab if there's an active release (only on initial load)
-        if (activeTab === 'plan') {
-          setActiveTab('release');
-        }
+        // Don't automatically switch tabs - let user choose
       } else {
         // No active release found - check if we had one before (release finished)
         if (currentHasActive) {
@@ -54,6 +53,15 @@ export const AppTabs: React.FC<AppTabsProps> = ({
     }
   };
 
+  // Check for worker connection on component mount
+  useEffect(() => {
+    const savedConnection = sessionStorage.getItem('workerConnection');
+    if (savedConnection) {
+      setIsWorkerConnected(true);
+      // Don't automatically switch tabs - let user choose
+    }
+  }, []);
+
   // Check for active release on component mount and set up periodic polling
   useEffect(() => {
     // Initial check
@@ -66,10 +74,20 @@ export const AppTabs: React.FC<AppTabsProps> = ({
     return () => clearInterval(interval);
   }, [activeTab]);
 
+  const handleConnectionChange = (isConnected: boolean) => {
+    setIsWorkerConnected(isConnected);
+    if (!isConnected) {
+      setActiveTab('connect'); // Switch back to connect tab after disconnecting
+    }
+    // Don't automatically switch to plan tab after connecting - let user choose
+  };
+
   // Plan-related handlers have been moved to PlanEditor component
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'connect':
+        return <Connect onConnectionChange={handleConnectionChange} />;
       case 'plan':
         return planEditor;
       case 'release':
@@ -101,16 +119,26 @@ export const AppTabs: React.FC<AppTabsProps> = ({
       <div className="tab-container">
         <div className="tab-navigation">
           <button
-            className={`tab-button ${activeTab === 'plan' ? 'active' : ''} ${(activeReleaseState === 'not_started' || activeReleaseState === 'running') ? 'disabled' : ''}`}
-            onClick={() => setActiveTab('plan')}
+            className={`tab-button ${activeTab === 'connect' ? 'active' : ''} ${(activeReleaseState === 'not_started' || activeReleaseState === 'running') ? 'disabled' : ''}`}
+            onClick={() => setActiveTab('connect')}
             disabled={activeReleaseState === 'not_started' || activeReleaseState === 'running'}
-            title={activeReleaseState === 'not_started' || activeReleaseState === 'running' ? 'Plan cannot be modified while release is active' : ''}
+            title={activeReleaseState === 'not_started' || activeReleaseState === 'running' ? 'Cannot change connection while release is active' : ''}
+          >
+            Connect
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'plan' ? 'active' : ''} ${!isWorkerConnected ? 'disabled' : ''}`}
+            onClick={() => setActiveTab('plan')}
+            disabled={!isWorkerConnected}
+            title={!isWorkerConnected ? 'Connect to a Worker first' : ''}
           >
             Plan
           </button>
           <button
-            className={`tab-button ${activeTab === 'release' ? 'active' : ''}`}
+            className={`tab-button ${activeTab === 'release' ? 'active' : ''} ${!isWorkerConnected ? 'disabled' : ''}`}
             onClick={() => setActiveTab('release')}
+            disabled={!isWorkerConnected}
+            title={!isWorkerConnected ? 'Connect to a Worker first' : ''}
           >
             <div className="plan-tabs-status-container">
               <span>Release</span>
@@ -129,8 +157,10 @@ export const AppTabs: React.FC<AppTabsProps> = ({
             </div>
           </button>
           <button
-            className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
+            className={`tab-button ${activeTab === 'history' ? 'active' : ''} ${!isWorkerConnected ? 'disabled' : ''}`}
             onClick={() => setActiveTab('history')}
+            disabled={!isWorkerConnected}
+            title={!isWorkerConnected ? 'Connect to a Worker first' : ''}
           >
             History
           </button>

@@ -106,6 +106,25 @@ button:focus-visible {
   box-shadow: none;
 }
 
+/* Form input placeholder styling */
+input::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+input::-webkit-input-placeholder {
+  color: #9ca3af;
+}
+
+input::-moz-placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+input:-ms-input-placeholder {
+  color: #9ca3af;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

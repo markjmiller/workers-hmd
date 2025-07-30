@@ -87,7 +87,12 @@ export const apiRequest = async <T = any>(
 export const api = {
   // Release endpoints
   getActiveRelease: () => apiRequest('/api/release/active'),
-  createRelease: () => apiRequest('/api/release', { method: 'POST' }),
+  createRelease: (data?: { old_version: string; new_version: string }) => 
+    apiRequest('/api/release', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: data ? JSON.stringify(data) : undefined
+    }),
   startRelease: () => apiRequest('/api/release/active', { 
     method: 'POST', 
     headers: { 'Content-Type': 'text/plain' },

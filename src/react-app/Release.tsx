@@ -22,15 +22,44 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   const [deleting, setDeleting] = useState<boolean>(false);
   const [starting, setStarting] = useState<boolean>(false);
   const [stopping, setStopping] = useState<boolean>(false);
+  const [oldVersion, setOldVersion] = useState<string>('');
+  const [newVersion, setNewVersion] = useState<string>('');
+  const [workerInfo, setWorkerInfo] = useState<{name: string, accountId: string} | null>(null);
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activeReleaseRef = useRef<Release | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number | undefined>();
 
-  // Check for active release on component mount
+  // Check for active release on component mount and ensure polling starts
   useEffect(() => {
-    checkActiveRelease();
+    const initializeRelease = async () => {
+      await checkActiveRelease();
+      // If there's an active release after checking, ensure polling is running
+      // This helps with cases where the component remounts after tab switching
+    };
+    
+    initializeRelease();
+    
+    // Load worker info from session storage
+    const savedConnection = sessionStorage.getItem('workerConnection');
+    if (savedConnection) {
+      try {
+        const connection = JSON.parse(savedConnection);
+        setWorkerInfo({
+          name: connection.workerName,
+          accountId: connection.accountId
+        });
+      } catch (error) {
+        console.error('Error parsing worker connection:', error);
+      }
+    }
   }, []);
+
+  // Keep activeReleaseRef in sync with activeRelease state
+  useEffect(() => {
+    activeReleaseRef.current = activeRelease;
+  }, [activeRelease]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -54,7 +83,9 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     }
 
     const interval = setInterval(async () => {
-      if (!activeRelease || !activeRelease.stages) {
+      // Use ref to get current activeRelease state - fixes closure issue after tab switching
+      const currentActiveRelease = activeReleaseRef.current;
+      if (!currentActiveRelease || !currentActiveRelease.stages) {
         return;
       }
 
@@ -87,8 +118,8 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           return;
         }
 
-        // Poll each stage for updates
-        const stagePromises = activeRelease.stages.map(async (stageRef) => {
+        // Poll each stage for updates - use current release from ref
+        const stagePromises = currentActiveRelease.stages.map(async (stageRef) => {
           if (!stageRef.id) return null;
           
           try {
@@ -197,8 +228,22 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
       if (release) {
         // Active release found
         setActiveRelease(release);
+        
+        // Start elapsed time timer if release is running
+        if (release.state === 'running') {
+          startElapsedTimeTimer(release);
+        }
+        
         // Fetch stages for the active release
         await fetchStagesForRelease(release);
+        
+        // Ensure polling is started - this is critical for tab switching
+        // We start polling after setting state to avoid race conditions
+        setTimeout(() => {
+          if (release.stages && release.stages.length > 0) {
+            startStagePolling();
+          }
+        }, 100);
       } else {
         // No active release found
         setActiveRelease(null);
@@ -223,8 +268,16 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   const createRelease = async () => {
     try {
       setCreating(true);
-      const newRelease = await api.createRelease();
+      // Create release with version UUIDs
+      const releaseData = {
+        old_version: oldVersion,
+        new_version: newVersion
+      };
+      const newRelease = await api.createRelease(releaseData);
       setActiveRelease(newRelease);
+      // Clear the input fields after successful creation
+      setOldVersion('');
+      setNewVersion('');
       // Fetch stages for the new release
       await fetchStagesForRelease(newRelease);
       if (onReleaseStateChange) {
@@ -324,10 +377,66 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
         <div className="create-release-container">
           <h3>No Active Release</h3>
           <p>Create a release from your current plan to begin deployment.</p>
+          
+          {workerInfo && (
+            <div className="card-info">
+              <p><strong>Worker:</strong> {workerInfo.name}</p>
+              <p><strong>Account ID:</strong> {workerInfo.accountId}</p>
+            </div>
+          )}
+          
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label htmlFor="oldVersion" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', textAlign: 'left', fontFamily: 'monospace' }}>
+                Old Version *
+              </label>
+              <input
+                type="text"
+                id="oldVersion"
+                value={oldVersion}
+                onChange={(e) => setOldVersion(e.target.value)}
+                placeholder="ae731ba815074b9b9f11c91d3983082d"
+                style={{ 
+                  fontFamily: 'monospace',
+                  width: '100%', 
+                  padding: '0.5rem', 
+                  border: '1px solid #ccc', 
+                  borderRadius: '4px',
+                  maxWidth: '400px'
+                }}
+                disabled={creating}
+                required
+              />
+            </div>
+            
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label htmlFor="newVersion" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', textAlign: 'left', fontFamily: 'monospace' }}>
+                New Version *
+              </label>
+              <input
+                type="text"
+                id="newVersion"
+                value={newVersion}
+                onChange={(e) => setNewVersion(e.target.value)}
+                placeholder="b6615a5d968147878ff10627dbc153d4"
+                style={{ 
+                  fontFamily: 'monospace',
+                  width: '100%', 
+                  padding: '0.5rem', 
+                  border: '1px solid #ccc', 
+                  borderRadius: '4px',
+                  maxWidth: '400px'
+                }}
+                disabled={creating}
+                required
+              />
+            </div>
+          </div>
+          
           <button 
             className="nice-button create-release-button"
             onClick={handleCreateRelease}
-            disabled={creating}
+            disabled={creating || !oldVersion || !newVersion}
           >
             {creating ? 'Creating Release...' : 'Create Release'}
           </button>
@@ -339,21 +448,33 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   return (
     <div className="release-active">
       <div className="release-header">
-        <div className="release-info" style={{ display: 'flex', alignItems: 'flex-start', flexDirection: 'column', gap: '0.5em' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
+        <div className="release-info">
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '0.5em', alignItems: 'baseline' }}>
             <span className={`release-state ${activeRelease.state}`}>
               {formatReleaseState(activeRelease.state)}
             </span>
-            <span className="release-id">ID: {activeRelease.id}</span>
+            <span className="release-id" style={{ marginLeft: '0.5em' }}>ID: {activeRelease.id}</span>
           </div>
-          <div className="release-timestamp">
+          {/* Worker and Version Information */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1em', fontSize: '0.9em', color: '#666', backgroundColor: '#f8f9fa', padding: '0.75em', borderRadius: '4px', }}>
+            {workerInfo && (
+              <span style={{ fontSize: '1.2em' }}><strong>{workerInfo.name}</strong></span>
+            )}
+            {activeRelease.old_version && (
+              <span style={{ fontSize: '0.875em' }}><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{activeRelease.old_version}</span></span>
+            )}
+            {activeRelease.new_version && (
+              <span style={{ fontSize: '0.875em' }}><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{activeRelease.new_version}</span></span>
+            )}
+          </div>
+          <div className="release-timestamp" style={{ marginLeft: '0.5em' }}>
             {activeRelease.state === 'not_started' && activeRelease.time_created && (
               <span className="timestamp-info">
                 Created: {new Date(activeRelease.time_created).toLocaleString()}
               </span>
             )}
             {activeRelease.state === 'running' && (
-              <div className="running-timestamps">
+              <div className="running-timestamps" style={{ marginLeft: '0.5em' }}>
                 {activeRelease.time_started && (
                   <span className="timestamp-info">
                     Started: {new Date(activeRelease.time_started).toLocaleString()}

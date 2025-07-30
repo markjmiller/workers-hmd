@@ -150,7 +150,7 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
             className="remove-button"
             title="Remove stage"
           >
-            🗑️
+            <i className="fas fa-trash"></i>
           </button>
         </div>
       )}

@@ -38,6 +38,7 @@ export class PlanStorage extends DurableObject<Env> {
         slos: [
           { value: "latency p999 < 100ms" },
         ],
+        worker_name: "my-worker",
       };
       await this.ctx.storage.put("main", plan);
     }

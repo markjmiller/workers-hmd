@@ -311,7 +311,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
                   title={slos.length <= 1 ? 'Cannot remove last SLO' : 'Remove SLO'}
                   disabled={slos.length <= 1}
                 >
-                  🗑️
+                  <i className="fas fa-trash"></i>
                 </button>
               </div>
             </div>

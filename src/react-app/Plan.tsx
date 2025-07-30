@@ -17,7 +17,24 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
   const [saveValidationError, setSaveValidationError] = useState<string>('');
   const [hasValidationErrors, setHasValidationErrors] = useState<boolean>(false);
   const [showJsonView, setShowJsonView] = useState<boolean>(false);
+  const [workerInfo, setWorkerInfo] = useState<{name: string, accountId: string} | null>(null);
   const getCurrentPlanRef = React.useRef<(() => Plan) | null>(null);
+
+  // Load worker info from session storage on component mount
+  React.useEffect(() => {
+    const savedConnection = sessionStorage.getItem('workerConnection');
+    if (savedConnection) {
+      try {
+        const connection = JSON.parse(savedConnection);
+        setWorkerInfo({
+          name: connection.workerName,
+          accountId: connection.accountId
+        });
+      } catch (error) {
+        console.error('Error parsing worker connection:', error);
+      }
+    }
+  }, []);
 
   const handleGetCurrentPlan = (getCurrentPlan: () => Plan) => {
     getCurrentPlanRef.current = getCurrentPlan;
@@ -53,6 +70,7 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
     const validatedPlan: Plan = {
       stages: sortedStages,
       slos: currentPlan.slos,
+      worker_name: currentPlan.worker_name,
     };
     
     onSave(validatedPlan);
@@ -60,6 +78,21 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
 
   return (
     <>
+      {/* Worker Info Display */}
+      {workerInfo && (
+        <div className="card-info" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <i className="fas fa-cog icon-secondary"></i>
+            <span style={{ fontSize: '0.95rem', color: '#495057' }}>
+              <strong>Worker:</strong> 
+              <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
+                {workerInfo.name}
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
+      
       {saveValidationError && (
         <div className="save-validation-error">
           <span className="error-icon">⚠️</span>
@@ -156,7 +189,24 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
     try {
       setSaveSuccess(false); // Clear any previous success state
       
-      const data = await api.updatePlan(updatedPlan);
+      // Get worker connection details from session storage
+      const workerConnectionStr = sessionStorage.getItem('workerConnection');
+      let planWithWorkerDetails = { ...updatedPlan };
+      
+      if (workerConnectionStr) {
+        try {
+          const workerConnection = JSON.parse(workerConnectionStr);
+          planWithWorkerDetails = {
+            ...updatedPlan,
+            worker_name: workerConnection.workerName
+          };
+        } catch (parseError) {
+          console.error('Error parsing worker connection:', parseError);
+          // Continue with plan save without worker details
+        }
+      }
+      
+      const data = await api.updatePlan(planWithWorkerDetails);
       setPlan(data);
       setSaveSuccess(true); // Show success message
 

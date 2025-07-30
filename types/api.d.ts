@@ -61,7 +61,7 @@ export interface paths {
         };
         /**
          * Get active release
-         * @description Retrieve the active release
+         * @description Retrieve the active release, or null if no active release exists
          */
         get: operations["getActiveRelease"];
         put?: never;
@@ -180,6 +180,8 @@ export interface components {
          *       "plan_record": {
          *         "$ref": "#/components/schemas/Plan"
          *       },
+         *       "old_version": "fa2c3d4e5a6a1b2d3d5e5f6a1b2c3d5",
+         *       "new_version": "e1a2c3d4e5f6a1b2d3d5e5f6a1b2c3d5",
          *       "stages": {
          *         "type": "array",
          *         "items": {
@@ -203,6 +205,8 @@ export interface components {
             /** @enum {string} */
             state: "not_started" | "running" | "done_stopped_manually" | "done_failed_slo" | "done_successful" | "error";
             plan_record: components["schemas"]["Plan"];
+            old_version: string;
+            new_version: string;
             stages: components["schemas"]["StageId"][];
             /** Format: date-time */
             time_created: string;
@@ -226,13 +230,15 @@ export interface components {
          *         {
          *           "$ref": "#/components/schemas/SLO"
          *         }
-         *       ]
+         *       ],
+         *       "worker_name": "my-worker"
          *     } */
         Plan: {
             stages: components["schemas"]["PlanStage"][];
             slos: components["schemas"]["SLO"][];
             /** Format: date-time */
             readonly time_last_saved?: string;
+            worker_name: string;
         };
         /** @example {
          *       "value": "latency p99 100"
@@ -440,21 +446,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active release retrieved successfully */
+            /** @description Success (returns active release or null) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Release"];
+                    "application/json": components["schemas"]["Release"] | null;
                 };
-            };
-            /** @description No active release found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

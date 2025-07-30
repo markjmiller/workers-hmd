@@ -52,14 +52,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5em;
+  margin-bottom: 0.5em;
   padding-bottom: 1em;
+  align-items: flex-start;
 }
 
 .release-info {
   display: flex;
-  gap: 1em;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.5em;
+  align-items: flex-start;
 }
 
 .release-id {
@@ -68,17 +70,11 @@
   font-family: monospace;
 }
 
-.release-timestamp {
-  margin-top: 0.5em;
-}
-
 .timestamp-info {
   color: #666;
   font-size: 0.75em;
   font-family: 'Roboto Mono', monospace;
   display: block;
-  margin-bottom: 0.25em;
-  padding: 0em 0.25em;
 }
 
 .running-timestamps {

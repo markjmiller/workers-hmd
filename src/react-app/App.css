@@ -7,11 +7,11 @@
 /* App Header */
 .app-header {
   text-align: left;
-  padding: 0px 1em 1em 0.5em;
+  padding: 0em 0em 1em 0em;
 }
 
 .app-title {
-  margin: 0 0 0.25em 0;
+  margin: 0;
   font-size: 1.5em;
 }
 
