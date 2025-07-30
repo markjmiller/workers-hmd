@@ -317,6 +317,150 @@ paths:
           description: Invalid command
         404:
           description: Stage not found
+  /worker/versions:
+    post:
+      summary: Get worker versions
+      description: Proxy request to fetch worker versions from Cloudflare API
+      operationId: getWorkerVersions
+      tags:
+        - Worker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - worker_name
+                - account_id
+                - api_token
+              properties:
+                worker_name:
+                  type: string
+                  description: Name of the Cloudflare Worker
+                account_id:
+                  type: string
+                  description: Cloudflare Account ID
+                api_token:
+                  type: string
+                  description: Cloudflare API Token for authentication
+      responses:
+        200:
+          description: Worker versions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  result:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkerVersion"
+        400:
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        401:
+          description: Invalid API token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Worker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /worker/deployments:
+    post:
+      summary: Get worker deployments
+      description: Proxy request to fetch worker deployments from Cloudflare API
+      operationId: getWorkerDeployments
+      tags:
+        - Worker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - worker_name
+                - account_id
+                - api_token
+              properties:
+                worker_name:
+                  type: string
+                  description: Name of the Cloudflare Worker
+                account_id:
+                  type: string
+                  description: Cloudflare Account ID
+                api_token:
+                  type: string
+                  description: Cloudflare API Token for authentication
+      responses:
+        200:
+          description: Worker deployments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  result:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkerDeployment"
+        400:
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        401:
+          description: Invalid API token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Worker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 components:
   securitySchemes:
@@ -535,6 +679,92 @@ components:
       properties:
         value:
           type: string
+    WorkerVersion:
+      type: object
+      description: Cloudflare Worker version information
+      required:
+        - id
+        - number
+      properties:
+        id:
+          type: string
+          description: Unique version identifier/hash
+          example: "25d3aa76-e335-4001-87a9-43a6be83f294"
+        number:
+          type: integer
+          description: Version number
+          example: 24
+        metadata:
+          type: object
+          description: Version metadata including creation info
+          properties:
+            created_on:
+              type: string
+              format: date-time
+              description: Timestamp when version was created
+              example: "2025-06-27T21:18:29.265546Z"
+            source:
+              type: string
+              example: "api"
+            author_id:
+              type: string
+            author_email:
+              type: string
+            has_preview:
+              type: boolean
+          additionalProperties: true
+        annotations:
+          type: object
+          description: Additional annotations
+          additionalProperties: true
+    WorkerDeployment:
+      type: object
+      description: Cloudflare Worker deployment information
+      required:
+        - id
+        - versions
+      properties:
+        id:
+          type: string
+          description: Unique deployment identifier
+          example: "01234567-89ab-cdef-0123-456789abcdef"
+        versions:
+          type: array
+          description: Versions included in this deployment with their traffic percentages
+          items:
+            type: object
+            required:
+              - version_id
+              - percentage
+            properties:
+              version_id:
+                type: string
+                description: Version identifier
+                example: "25d3aa76-e335-4001-87a9-43a6be83f294"
+              percentage:
+                type: number
+                description: Traffic percentage for this version (0-100)
+                example: 100
+        source:
+          type: string
+          description: Deployment source (e.g., api, dash)
+          example: "api"
+        strategy:
+          type: string
+          description: Deployment strategy
+          example: "percentage"
+        author_email:
+          type: string
+          description: Email of deployment author
+        created_on:
+          type: string
+          format: date-time
+          description: Timestamp when deployment was created
+          example: "2025-06-27T21:18:29.265546Z"
+        annotations:
+          type: object
+          description: Additional deployment annotations
+          additionalProperties: true
     Error:
       type: object
       description: Standard error response format

@@ -1,6 +1,14 @@
 // Shared utility functions for React app
 
 /**
+ * Display short version of UUID for better readability
+ * Extracts first section before the first dash
+ */
+export const getShortVersionId = (fullVersionId: string): string => {
+  return fullVersionId.split('-')[0];
+};
+
+/**
  * Format time in seconds as H:M:S
  */
 export const formatTimeHMS = (seconds: number): string => {
@@ -21,12 +29,10 @@ export const formatReleaseState = (state: string): string => {
       return 'RUNNING';
     case 'done_successful':
       return 'SUCCESS';
-    case 'done_failed':
-      return 'FAILED';
     case 'done_stopped_manually':
       return 'STOPPED MANUALLY';
     case 'done_failed_slo':
-      return 'FAILED (SLO)';
+      return 'FAILED';
     default:
       return state.replace(/_/g, ' ').toUpperCase();
   }

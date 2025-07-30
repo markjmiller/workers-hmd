@@ -124,6 +124,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/worker/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get worker versions
+         * @description Proxy request to fetch worker versions from Cloudflare API
+         */
+        post: operations["getWorkerVersions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/worker/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get worker deployments
+         * @description Proxy request to fetch worker deployments from Cloudflare API
+         */
+        post: operations["getWorkerDeployments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -245,6 +285,82 @@ export interface components {
          *     } */
         SLO: {
             value: string;
+        };
+        /** @description Cloudflare Worker version information */
+        WorkerVersion: {
+            /**
+             * @description Unique version identifier/hash
+             * @example 25d3aa76-e335-4001-87a9-43a6be83f294
+             */
+            id: string;
+            /**
+             * @description Version number
+             * @example 24
+             */
+            number: number;
+            /** @description Version metadata including creation info */
+            metadata?: {
+                /**
+                 * Format: date-time
+                 * @description Timestamp when version was created
+                 * @example 2025-06-27T21:18:29.265546Z
+                 */
+                created_on?: string;
+                /** @example api */
+                source?: string;
+                author_id?: string;
+                author_email?: string;
+                has_preview?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Additional annotations */
+            annotations?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Cloudflare Worker deployment information */
+        WorkerDeployment: {
+            /**
+             * @description Unique deployment identifier
+             * @example 01234567-89ab-cdef-0123-456789abcdef
+             */
+            id: string;
+            /** @description Versions included in this deployment with their traffic percentages */
+            versions: {
+                /**
+                 * @description Version identifier
+                 * @example 25d3aa76-e335-4001-87a9-43a6be83f294
+                 */
+                version_id: string;
+                /**
+                 * @description Traffic percentage for this version (0-100)
+                 * @example 100
+                 */
+                percentage: number;
+            }[];
+            /**
+             * @description Deployment source (e.g., api, dash)
+             * @example api
+             */
+            source?: string;
+            /**
+             * @description Deployment strategy
+             * @example percentage
+             */
+            strategy?: string;
+            /** @description Email of deployment author */
+            author_email?: string;
+            /**
+             * Format: date-time
+             * @description Timestamp when deployment was created
+             * @example 2025-06-27T21:18:29.265546Z
+             */
+            created_on?: string;
+            /** @description Additional deployment annotations */
+            annotations?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description Standard error response format
@@ -656,6 +772,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getWorkerVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the Cloudflare Worker */
+                    worker_name: string;
+                    /** @description Cloudflare Account ID */
+                    account_id: string;
+                    /** @description Cloudflare API Token for authentication */
+                    api_token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Worker versions retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example true */
+                        success?: boolean;
+                        result?: components["schemas"]["WorkerVersion"][];
+                    };
+                };
+            };
+            /** @description Invalid request parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid API token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Access denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Worker not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getWorkerDeployments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the Cloudflare Worker */
+                    worker_name: string;
+                    /** @description Cloudflare Account ID */
+                    account_id: string;
+                    /** @description Cloudflare API Token for authentication */
+                    api_token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Worker deployments retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example true */
+                        success?: boolean;
+                        result?: components["schemas"]["WorkerDeployment"][];
+                    };
+                };
+            };
+            /** @description Invalid request parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid API token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Access denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Worker not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };

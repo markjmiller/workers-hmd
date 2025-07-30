@@ -18,6 +18,8 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
   });
 
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Check if already connected on component mount
   useEffect(() => {
@@ -41,7 +43,7 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
     }));
   };
 
-  const handleConnect = (e: React.FormEvent) => {
+  const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate required fields
@@ -50,20 +52,63 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
       return;
     }
 
-    // Store connection info in session storage
-    sessionStorage.setItem('workerConnection', JSON.stringify(formData));
-    setIsConnected(true);
-    onConnectionChange(true);
+    setIsConnecting(true);
+    setConnectionError(null);
+
+    try {
+      // Test the connection by calling our internal API proxy
+      const response = await fetch('/api/worker/versions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          worker_name: formData.workerName,
+          account_id: formData.accountId,
+          api_token: formData.apiToken,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.result) {
+          // Connection successful - store in session storage
+          sessionStorage.setItem('workerConnection', JSON.stringify(formData));
+          sessionStorage.setItem('apiToken', formData.apiToken);
+          setIsConnected(true);
+          onConnectionChange(true);
+        } else {
+          throw new Error('No worker versions found. Please check your worker name.');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Connection failed');
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      let errorMessage = 'Failed to connect to worker.';
+      
+      if (error instanceof Error) {
+        // The server-side proxy already provides user-friendly error messages
+        errorMessage = error.message;
+      }
+      
+      setConnectionError(errorMessage);
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleDisconnect = () => {
     sessionStorage.removeItem('workerConnection');
+    sessionStorage.removeItem('apiToken');
     setFormData({
       apiToken: '',
       accountId: '',
       workerName: ''
     });
     setIsConnected(false);
+    setConnectionError(null);
     onConnectionChange(false);
   };
 
@@ -93,6 +138,15 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
                     {formData.workerName}
                   </span>
                 </span>
+                <a 
+                  href={`https://dash.cloudflare.com/${formData.accountId}/workers/services/view/${formData.workerName}/production/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#666', textDecoration: 'none' }}
+                  title="Open in Cloudflare Dashboard"
+                >
+                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+                </a>
               </div>
               
               <div className="status-detail-item">
@@ -153,19 +207,18 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
               {/* Help Text */}
               <div className="help-text-warning">
                 <div className="margin-bottom-small">
-                  <a 
+                  <i className="fas fa-exclamation-triangle"></i> <a 
                     href="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="help-link"
                   >
-                    <i className="fas fa-external-link-alt" style={{ marginRight: '0.5rem' }}></i>
-                    How to create a token
+                    How to create a token <i className="fas fa-external-link-alt" style={{ marginRight: '0.5rem' }}></i>
                   </a>
                 </div>
                 <div className="help-warning-content">
-                  <i className="fas fa-exclamation-triangle"></i>
-                  <span>Don't share your API token anywhere you don't trust!</span>
+                  <span>Don't share your API token anywhere you don't trust! Not even here. You can deploy your own version of this demo that you can trust:</span>
+                  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/markjmiller/workers-hmd"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"/></a>
                 </div>
               </div>
               
@@ -229,13 +282,41 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
               />
             </div>
 
+            {/* Error Message */}
+            {connectionError && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '1rem', 
+                border: '1px solid #ffcccc', 
+                borderRadius: '4px', 
+                backgroundColor: '#fff5f5' 
+              }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', color: '#d32f2f', fontSize: '1rem' }}>
+                  Connection Failed
+                </h4>
+                <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>
+                  {connectionError}
+                </p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <button 
               type="submit" 
               className="nice-button button-full-width"
+              disabled={isConnecting}
             >
-              <i className="fas fa-plug"></i>
-              Connect
+              {isConnecting ? (
+                <>
+                  <div className="loading-spinner" style={{ width: '16px', height: '16px', marginRight: '0.5rem' }}></div>
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-plug"></i>
+                  Connect
+                </>
+              )}
             </button>
           </form>
         </div>

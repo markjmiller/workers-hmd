@@ -81,7 +81,7 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
       {/* Worker Info Display */}
       {workerInfo && (
         <div className="card-info" style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
             <i className="fas fa-cog icon-secondary"></i>
             <span style={{ fontSize: '0.95rem', color: '#495057' }}>
               <strong>Worker:</strong> 
@@ -89,6 +89,15 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
                 {workerInfo.name}
               </span>
             </span>
+            <a 
+              href={`https://dash.cloudflare.com/${workerInfo.accountId}/workers/services/view/${workerInfo.name}/production/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#666', textDecoration: 'none' }}
+              title="Open in Cloudflare Dashboard"
+            >
+              <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+            </a>
           </div>
         </div>
       )}

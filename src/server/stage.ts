@@ -81,7 +81,7 @@ export class StageStorage extends DurableObject<Env> {
       case 'awaiting_approval->running':
         return `✅ Stage approved by user - continuing`;
       case 'running->done_successful':
-        return `🎉 Stage completed successfully`;
+        return `🎉 Stage completed successfully and auto progressed`;
       case 'awaiting_approval->done_successful':
         return `🎉 Stage completed successfully`;
       case 'running->done_failed':

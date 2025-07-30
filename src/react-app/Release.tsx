@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { components } from '../../types/api';
 import { StageItem } from './StageItem';
-import { formatReleaseState, api, isReleaseComplete } from './utils';
+import { formatReleaseState, api, isReleaseComplete, getShortVersionId } from './utils';
 import './Release.css';
 
 type Release = components['schemas']['Release'];
@@ -13,6 +13,8 @@ interface ReleaseProps {
   onTabChange?: () => void; // Called when user switches away from Release tab
 }
 
+
+
 export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange, onTabChange }) => {
   const [activeRelease, setActiveRelease] = useState<Release | null>(null);
   const [releaseStages, setReleaseStages] = useState<ReleaseStage[]>([]);
@@ -22,9 +24,15 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
   const [deleting, setDeleting] = useState<boolean>(false);
   const [starting, setStarting] = useState<boolean>(false);
   const [stopping, setStopping] = useState<boolean>(false);
-  const [oldVersion, setOldVersion] = useState<string>('');
-  const [newVersion, setNewVersion] = useState<string>('');
   const [workerInfo, setWorkerInfo] = useState<{name: string, accountId: string} | null>(null);
+  const [workerVersions, setWorkerVersions] = useState<any[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState<boolean>(false);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
+  const [connectionVerified, setConnectionVerified] = useState<boolean>(false);
+  const [, setActiveDeployment] = useState<any>(null);
+  const [deploymentError, setDeploymentError] = useState<string | null>(null);
+  const [selectedOldVersion, setSelectedOldVersion] = useState<string>('');
+  const [selectedNewVersion, setSelectedNewVersion] = useState<string>('');
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,6 +58,9 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           name: connection.workerName,
           accountId: connection.accountId
         });
+        // Fetch worker versions and deployment info after setting worker info
+        fetchWorkerVersions(connection.workerName, connection.accountId);
+        fetchActiveDeployment(connection.workerName, connection.accountId);
       } catch (error) {
         console.error('Error parsing worker connection:', error);
       }
@@ -69,11 +80,165 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     };
   }, []);
 
+  // Fetch worker versions
+  const fetchWorkerVersions = async (workerName: string, accountId: string) => {
+    setVersionsLoading(true);
+    setVersionsError(null);
+    setConnectionVerified(false);
+    
+    try {
+      const apiToken = sessionStorage.getItem('apiToken');
+      if (!apiToken) {
+        throw new Error('API token not found in session storage');
+      }
+
+      // Call our internal API proxy instead of Cloudflare directly
+      const response = await fetch('/api/worker/versions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          worker_name: workerName,
+          account_id: accountId,
+          api_token: apiToken,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.result) {
+          let versions = data.result;
+          
+          // Ensure the currently deployed version is included in the list
+          if (selectedOldVersion) {
+            const deployedVersionExists = versions.some((v: any) => v.id === selectedOldVersion);
+            if (!deployedVersionExists) {
+              // Add deployed version placeholder if not in top 5
+              const deployedVersionPlaceholder = {
+                id: selectedOldVersion,
+                number: 0,
+                metadata: { created_on: new Date().toISOString() },
+                annotations: {}
+              };
+              versions = [deployedVersionPlaceholder, ...versions.slice(0, 4)];
+            }
+          }
+          
+          setWorkerVersions(versions);
+          setConnectionVerified(true);
+        } else {
+          throw new Error('No versions found');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to connect to worker');
+      }
+    } catch (error) {
+      console.error('Error fetching worker versions:', error);
+      setVersionsError(
+        error instanceof Error ? 
+        error.message : 
+        'Failed to connect to worker. Please check your worker name and account settings.'
+      );
+      setConnectionVerified(false);
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
+
+  // Fetch active deployment information
+  const fetchActiveDeployment = async (workerName: string, accountId: string) => {
+    try {
+      const apiToken = sessionStorage.getItem('apiToken');
+      if (!apiToken) {
+        throw new Error('API token not found in session storage');
+      }
+
+      // Call our internal API proxy for deployments
+      const response = await fetch('/api/worker/deployments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          worker_name: workerName,
+          account_id: accountId,
+          api_token: apiToken,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success && data.result && data.result.length > 0) {
+          const deploymentsData = data.result[0];
+          
+          if (deploymentsData.deployments && deploymentsData.deployments.length > 0) {
+            const activeDeployment = deploymentsData.deployments[0];
+            setActiveDeployment(activeDeployment);
+            
+            // Process deployment versions
+            if (activeDeployment.versions) {
+              if (activeDeployment.versions.length === 1 && activeDeployment.versions[0].percentage === 100) {
+                // Single version at 100% - this is the active version
+                setSelectedOldVersion(activeDeployment.versions[0].version_id);
+              } else if (activeDeployment.versions.length > 1) {
+                // Multiple versions - split deployment
+                const versionSummary = activeDeployment.versions
+                  .map((v: any) => `${v.version_id.substring(0, 8)}... (${v.percentage}%)`)
+                  .join(' and ');
+                setDeploymentError(`There's already an active split deployment between ${versionSummary}`);
+              }
+            }
+          } else {
+            setDeploymentError('No deployments found in response');
+          }
+        } else {
+          setDeploymentError('No active deployment found');
+        }
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error fetching deployment information:', error);
+      setDeploymentError(
+        error instanceof Error ? 
+        error.message : 
+        'Failed to fetch deployment information'
+      );
+    }
+  };
+
   // Create release handler
   const handleCreateRelease = async () => {
-    await createRelease();
-    // Force refresh to check for new active release
-    await checkActiveRelease();
+    try {
+      setCreating(true);
+      // Create release with selected version UUIDs directly
+      const releaseData = {
+        old_version: selectedOldVersion,
+        new_version: selectedNewVersion
+      };
+      const newRelease = await api.createRelease(releaseData);
+      setActiveRelease(newRelease);
+      // Clear the selected versions after successful creation
+      setSelectedOldVersion('');
+      setSelectedNewVersion('');
+      // Fetch stages for the new release
+      await fetchStagesForRelease(newRelease);
+      if (onReleaseStateChange) {
+        onReleaseStateChange();
+      }
+      // Force refresh to check for new active release
+      await checkActiveRelease();
+    } catch (error) {
+      console.error('Error creating release:', error);
+      if (onError) {
+        onError(error instanceof Error ? error.message : 'Failed to create release');
+      }
+    } finally {
+      setCreating(false);
+    }
   };
 
   // Start polling for stage updates
@@ -265,33 +430,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
     }
   };
 
-  const createRelease = async () => {
-    try {
-      setCreating(true);
-      // Create release with version UUIDs
-      const releaseData = {
-        old_version: oldVersion,
-        new_version: newVersion
-      };
-      const newRelease = await api.createRelease(releaseData);
-      setActiveRelease(newRelease);
-      // Clear the input fields after successful creation
-      setOldVersion('');
-      setNewVersion('');
-      // Fetch stages for the new release
-      await fetchStagesForRelease(newRelease);
-      if (onReleaseStateChange) {
-        onReleaseStateChange();
-      }
-    } catch (error) {
-      console.error('Error creating release:', error);
-      if (onError) {
-        onError(error instanceof Error ? error.message : 'Failed to create release');
-      }
-    } finally {
-      setCreating(false);
-    }
-  };
+
 
   const deleteRelease = async () => {
     if (!activeRelease) return;
@@ -380,62 +519,169 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           
           {workerInfo && (
             <div className="card-info">
-              <p style={{ fontSize: '1em', margin: '0' }}>{workerInfo.name}</p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                <i className="fas fa-cog icon-secondary"></i>
+                <span style={{ fontSize: '0.95rem', color: '#495057' }}>
+                  <strong>Worker:</strong> 
+                  <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
+                    {workerInfo.name}
+                  </span>
+                </span>
+                <a 
+                  href={`https://dash.cloudflare.com/${workerInfo.accountId}/workers/services/view/${workerInfo.name}/production/deployments`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#666', textDecoration: 'none' }}
+                  title="Open in Cloudflare Dashboard"
+                >
+                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+                </a>
+              </div>
+              
+              {/* Worker Connection Status */}
+
+              {versionsLoading ? (
+                <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e0e0e0', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div className="loading-spinner" style={{ width: '16px', height: '16px' }}></div>
+                    <span>Loading versions...</span>
+                  </div>
+                </div>
+              ) : versionsError ? (
+                <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #ffcccc', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#d32f2f', fontSize: '1rem' }}>Could not connect to worker</h4>
+                  <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>{versionsError}</p>
+                  <button 
+                    onClick={() => fetchWorkerVersions(workerInfo.name, workerInfo.accountId)}
+                    style={{ 
+                      marginTop: '0.75rem', 
+                      padding: '0.25rem 0.75rem', 
+                      fontSize: '0.8rem',
+                      border: '1px solid #d32f2f',
+                      backgroundColor: 'transparent',
+                      color: '#d32f2f',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Retry Connection
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
           
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label htmlFor="oldVersion" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', textAlign: 'left', fontFamily: 'monospace' }}>
-                Old Version *
-              </label>
-              <input
-                type="text"
-                id="oldVersion"
-                value={oldVersion}
-                onChange={(e) => setOldVersion(e.target.value)}
-                placeholder="ae731ba815074b9b9f11c91d3983082d"
-                style={{ 
-                  fontFamily: 'monospace',
-                  width: '100%', 
-                  padding: '0.5rem', 
-                  border: '1px solid #ccc', 
-                  borderRadius: '4px',
-                  maxWidth: '400px'
-                }}
-                disabled={creating}
-                required
-              />
+          {/* Deployment Status */}
+          {deploymentError ? (
+            <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #ffcccc', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#d32f2f', fontSize: '1rem' }}>⚠️ Cannot Create Release</h4>
+              <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>{deploymentError}</p>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#666' }}>Please resolve the split deployment before creating a new release.</p>
             </div>
-            
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label htmlFor="newVersion" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', textAlign: 'left', fontFamily: 'monospace' }}>
-                New Version *
-              </label>
-              <input
-                type="text"
-                id="newVersion"
-                value={newVersion}
-                onChange={(e) => setNewVersion(e.target.value)}
-                placeholder="b6615a5d968147878ff10627dbc153d4"
-                style={{ 
-                  fontFamily: 'monospace',
-                  width: '100%', 
-                  padding: '0.5rem', 
-                  border: '1px solid #ccc', 
-                  borderRadius: '4px',
-                  maxWidth: '400px'
-                }}
-                disabled={creating}
-                required
-              />
+          ) : connectionVerified && workerVersions.length > 0 ? (
+            <div style={{ marginBottom: '1rem' }}>
+              {/* Version Selection */}
+              <div style={{ marginBottom: '1rem' }}>
+                <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem' }}>Select version to deploy</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {workerVersions.map((version) => {
+                    const isSelected = selectedNewVersion === version.id;
+                    const isActive = selectedOldVersion === version.id; // Currently deployed version
+                    const isLatest = workerVersions[0]?.id === version.id; // Most recently uploaded
+                    const isDisabled = isActive || creating;
+                    
+
+                    return (
+                      <button
+                        key={version.id}
+                        onClick={() => !isDisabled && setSelectedNewVersion(version.id)}
+                        disabled={isDisabled}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.75rem',
+                          border: isSelected 
+                            ? '2px solid #2196f3' 
+                            : isActive 
+                            ? '1px solid #4caf50' 
+                            : '1px solid #e0e0e0',
+                          borderRadius: '4px',
+                          backgroundColor: isSelected 
+                            ? '#e3f2fd' 
+                            : isActive 
+                            ? '#e8f5e8' 
+                            : '#f9f9f9',
+                          cursor: isDisabled ? 'not-allowed' : 'pointer',
+                          opacity: isDisabled ? 0.7 : 1,
+                          textAlign: 'left'
+                        }}
+                        title={isActive ? 'Currently deployed version - cannot select' : 'Click to select this version'}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all', color: '#333' }}>
+                              {getShortVersionId(version.id)}
+                            </span>
+                            {isActive && (
+                              <span style={{ 
+                                fontSize: '0.65rem', 
+                                color: 'white', 
+                                backgroundColor: '#4caf50', 
+                                padding: '0.15rem 0.4rem', 
+                                borderRadius: '12px', 
+                                fontWeight: '600',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>
+                                Active
+                              </span>
+                            )}
+                            {isLatest && !isActive && (
+                              <span style={{ 
+                                fontSize: '0.65rem', 
+                                color: 'white', 
+                                backgroundColor: '#ffb74a', 
+                                padding: '0.15rem 0.4rem', 
+                                borderRadius: '12px', 
+                                fontWeight: '600',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>
+                                Latest
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Version Message */}
+                          {version.annotations && version.annotations['workers/message'] && (
+                            <div style={{ fontSize: '0.8rem', color: '#444', marginTop: '0.25rem', fontStyle: 'italic', backgroundColor: 'rgb(223, 223, 223)', padding: '0.25rem', borderRadius: '4px' }}>
+                              "{version.annotations['workers/message']}"
+                            </div>
+                          )}
+                          
+                          {/* Date */}
+                          <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.5rem' }}>
+                            {version.metadata?.created_on ? new Date(version.metadata.created_on).toLocaleString() : 'No date available'}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div style={{ marginLeft: '1rem', color: '#2196f3', fontWeight: 'bold', fontSize: '1.2rem' }}>
+                            ✓
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : null}
           
           <button 
             className="nice-button create-release-button"
             onClick={handleCreateRelease}
-            disabled={creating || !oldVersion || !newVersion}
+            disabled={creating || !selectedOldVersion || !selectedNewVersion || !!deploymentError}
           >
             {creating ? 'Creating Release...' : 'Create Release'}
           </button>
@@ -452,18 +698,35 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
             <span className={`release-state ${activeRelease.state}`}>
               {formatReleaseState(activeRelease.state)}
             </span>
-            <span className="release-id" style={{ marginLeft: '0.5em' }}>ID: {activeRelease.id}</span>
+            <span className="release-id">ID: {activeRelease.id}</span>
           </div>
           {/* Worker and Version Information */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1em', fontSize: '0.9em', color: '#666', backgroundColor: '#f8f9fa', padding: '0.75em', borderRadius: '4px', }}>
             {workerInfo && (
-              <span style={{ fontSize: '1.2em' }}><strong>{workerInfo.name}</strong></span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                <i className="fas fa-cog icon-secondary"></i>
+                <span style={{ fontSize: '0.95rem', color: '#495057' }}>
+                  <strong>Worker:</strong> 
+                  <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
+                    {workerInfo.name}
+                  </span>
+                </span>
+                <a 
+                  href={`https://dash.cloudflare.com/${workerInfo.accountId}/workers/services/view/${workerInfo.name}/production/deployments`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#666', textDecoration: 'none' }}
+                  title="Open in Cloudflare Dashboard"
+                >
+                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+                </a>
+              </div>
             )}
             {activeRelease.old_version && (
-              <span style={{ fontSize: '0.875em' }}><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{activeRelease.old_version}</span></span>
+              <span style={{ fontSize: '0.875em' }}><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.old_version)}</span></span>
             )}
             {activeRelease.new_version && (
-              <span style={{ fontSize: '0.875em' }}><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{activeRelease.new_version}</span></span>
+              <span style={{ fontSize: '0.875em' }}><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(activeRelease.new_version)}</span></span>
             )}
           </div>
           <div className="release-timestamp" style={{ marginLeft: '0.5em' }}>

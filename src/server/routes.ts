@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prettyJSON } from "hono/pretty-json";
 import { validator } from "hono/validator";
 import type { components } from "../../types/api";
+import { Cloudflare as cf } from "cloudflare";
 import { PlanStorage } from "./plan";
 import { StageStorage } from "./stage";
 import { ReleaseHistory } from "./releaseHistory";
@@ -394,6 +395,172 @@ api.post("/stage/:stageId", async (c) => {
     return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
 });
+
+// Worker versions proxy route
+api.post("/worker/versions", 
+  validator("json", (value, c) => {
+    if (!value || typeof value !== "object") {
+      return c.json({ message: "Invalid request body", ok: false }, 400);
+    }
+    
+    const { worker_name, account_id, api_token } = value as Record<string, unknown>;
+    
+    if (!worker_name || typeof worker_name !== "string") {
+      return c.json({ message: "worker_name is required and must be a string", ok: false }, 400);
+    }
+    
+    if (!account_id || typeof account_id !== "string") {
+      return c.json({ message: "account_id is required and must be a string", ok: false }, 400);
+    }
+    
+    if (!api_token || typeof api_token !== "string") {
+      return c.json({ message: "api_token is required and must be a string", ok: false }, 400);
+    }
+    
+    return { worker_name, account_id, api_token };
+  }),
+  async (c) => {
+    try {
+      const { worker_name, account_id, api_token } = c.req.valid("json");
+      
+      // Create Cloudflare client with provided API token
+      const client = new cf({
+        apiToken: api_token,
+      });
+      
+      // Fetch worker versions from Cloudflare API
+      const response = await client.workers.scripts.versions.list(
+        worker_name,
+        {
+          account_id: account_id,
+        }
+      );
+      
+      if (response.result?.items) {
+        // Return the versions in the expected format
+        return c.json({
+          success: true,
+          result: response.result.items.slice(0, 5) // Return only the 5 most recent
+        });
+      } else {
+        return c.json({ 
+          message: "No worker versions found. Please check your worker name.", 
+          ok: false 
+        }, 404);
+      }
+      
+    } catch (error: any) {
+      console.error("Error fetching worker versions:", error);
+      
+      // Handle specific Cloudflare API errors
+      if (error.status === 401 || error.message?.includes("401") || error.message?.includes("Unauthorized")) {
+        return c.json({ 
+          message: "Invalid API token. Please check your token and try again.", 
+          ok: false 
+        }, 401);
+      } else if (error.status === 403 || error.message?.includes("403") || error.message?.includes("Forbidden")) {
+        return c.json({ 
+          message: "Access denied. Please check your account ID and token permissions.", 
+          ok: false 
+        }, 403);
+      } else if (error.status === 404 || error.message?.includes("404") || error.message?.includes("Not Found")) {
+        return c.json({ 
+          message: "Worker not found. Please check your worker name and account ID.", 
+          ok: false 
+        }, 404);
+      } else {
+        return c.json({ 
+          message: `Failed to fetch worker versions: ${error.message || 'Unknown error'}`, 
+          ok: false 
+        }, 500);
+      }
+    }
+  }
+);
+
+// Worker deployments proxy route
+api.post("/worker/deployments", 
+  validator("json", (value, c) => {
+    if (!value || typeof value !== "object") {
+      return c.json({ message: "Invalid request body", ok: false }, 400);
+    }
+    
+    const { worker_name, account_id, api_token } = value as Record<string, unknown>;
+    
+    if (!worker_name || typeof worker_name !== "string") {
+      return c.json({ message: "worker_name is required and must be a string", ok: false }, 400);
+    }
+    
+    if (!account_id || typeof account_id !== "string") {
+      return c.json({ message: "account_id is required and must be a string", ok: false }, 400);
+    }
+    
+    if (!api_token || typeof api_token !== "string") {
+      return c.json({ message: "api_token is required and must be a string", ok: false }, 400);
+    }
+    
+    return { worker_name, account_id, api_token };
+  }),
+  async (c) => {
+    try {
+      const { worker_name, account_id, api_token } = c.req.valid("json");
+      
+      // Create Cloudflare client with provided API token
+      const client = new cf({
+        apiToken: api_token,
+      });
+      
+      // Fetch worker deployments from Cloudflare API
+      const response = await client.workers.scripts.deployments.get(
+        worker_name,
+        {
+          account_id: account_id,
+        }
+      );
+      
+      if (response) {
+        // The deployment API returns data directly, wrap it in our expected format
+        // Convert single deployment response to array format for consistency
+        const deployments = Array.isArray(response) ? response : [response];
+        return c.json({
+          success: true,
+          result: deployments
+        });
+      } else {
+        return c.json({ 
+          message: "No worker deployments found. Please check your worker name.", 
+          ok: false 
+        }, 404);
+      }
+      
+    } catch (error: any) {
+      console.error("Error fetching worker deployments:", error);
+      
+      // Handle specific Cloudflare API errors
+      if (error.status === 401 || error.message?.includes("401") || error.message?.includes("Unauthorized")) {
+        return c.json({ 
+          message: "Invalid API token. Please check your token and try again.", 
+          ok: false 
+        }, 401);
+      } else if (error.status === 403 || error.message?.includes("403") || error.message?.includes("Forbidden")) {
+        return c.json({ 
+          message: "Access denied. Please check your account ID and token permissions.", 
+          ok: false 
+        }, 403);
+      } else if (error.status === 404 || error.message?.includes("404") || error.message?.includes("Not Found")) {
+        return c.json({ 
+          message: "Worker not found. Please check your worker name and account ID.", 
+          ok: false 
+        }, 404);
+      } else {
+        return c.json({ 
+          message: `Failed to fetch worker deployments: ${error.message || 'Unknown error'}`, 
+          ok: false 
+        }, 500);
+      }
+    }
+  }
+);
 
 app.route("/api", api);
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { components } from '../../types/api';
 import { StageItem } from './StageItem';
-import { formatReleaseState, getStateColor, api, isReleaseComplete } from './utils';
+import { formatReleaseState, getStateColor, api, isReleaseComplete, getShortVersionId } from './utils';
 import './History.css';
 
 type Release = components["schemas"]["Release"];
@@ -9,6 +9,8 @@ type Release = components["schemas"]["Release"];
 interface HistoryProps {
   onError?: (error: string) => void;
 }
+
+
 
 type ReleaseStage = components["schemas"]["ReleaseStage"];
 
@@ -247,41 +249,31 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                 <div key={release.id} className="history-item">
                   <div className="history-header" onClick={() => toggleReleaseExpanded(release.id)}>
                     <div className="history-info">
-                      <span 
-                        className="history-state"
-                        style={{ backgroundColor: getStateColor(release.state) }}
-                      >
-                        {formatReleaseState(release.state)}
-                      </span>
-                      <span className="history-id">ID: {release.id}</span>
+                      <div style={{ display: 'flex', flexDirection: 'row', gap: '0.5em', alignItems: 'baseline' }}>
+                        <span 
+                          className="history-state"
+                          style={{ backgroundColor: getStateColor(release.state) }}
+                        >
+                          {formatReleaseState(release.state)}
+                        </span>
+                        <span className="history-id">ID: {release.id}</span>
+                      </div>
                       
                       {/* Worker and Version Information */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25em', fontSize: '0.85em', color: '#666', marginTop: '0.25em' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1em', fontSize: '0.9em', color: '#666', backgroundColor: '#f8f9fa', padding: '0.75em', borderRadius: '4px', }}>
                         {release.plan_record?.worker_name && (
                           <span><strong>Worker:</strong> {release.plan_record.worker_name}</span>
                         )}
                         {release.old_version && (
-                          <span><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{release.old_version}</span></span>
+                          <span><strong>Old Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.old_version)}</span></span>
                         )}
                         {release.new_version && (
-                          <span><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{release.new_version}</span></span>
+                          <span><strong>New Version:</strong> <span style={{ fontFamily: 'monospace' }}>{getShortVersionId(release.new_version)}</span></span>
                         )}
                       </div>
-                      
-                      {release.time_elapsed !== undefined && (
-                        <div style={{ display: 'flex', gap: '0.5em', alignItems: 'baseline', marginTop: '0.5em' }}>
-                          <span className='stat-label'>Duration:</span>
-                          <span className="stat-value">{formatDuration(release.time_elapsed)}</span>
-                        </div>
-                      )}
                     </div>
                     <div className="history-header-right">
                       <div className="history-timestamps">
-                        {release.time_created && (
-                          <span className="history-timestamp">
-                            Created: {new Date(release.time_created).toLocaleString()}
-                          </span>
-                        )}
                         {release.time_started && (
                           <span className="history-timestamp">
                             Started: {new Date(release.time_started).toLocaleString()}
@@ -291,6 +283,12 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                           <span className="history-timestamp">
                             Completed: {new Date(release.time_done).toLocaleString()}
                           </span>
+                        )}
+                        {release.time_elapsed !== undefined && (
+                          <div style={{ display: 'flex', gap: '0.5em', alignItems: 'baseline', marginTop: '0.5em' }}>
+                            <span className='stat-label'>Duration:</span>
+                            <span className="stat-value">{formatDuration(release.time_elapsed)}</span>
+                          </div>
                         )}
                       </div>
                       <button className="expand-toggle-btn">

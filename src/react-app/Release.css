@@ -284,10 +284,9 @@
 
 .stage-timing {
   display: flex;
-  gap: 1em;
+  flex-direction: column;
+  gap: 0.25em;
   margin-top: 0.5em;
-  align-items: center;
-  flex-wrap: wrap;
 }
 
 .stage-time {

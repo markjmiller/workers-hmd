@@ -113,9 +113,17 @@ export const StageItem: React.FC<StageItemProps> = ({
           <>
             <div className="stage-timing">
               {releaseStage.state === 'running' && releaseStage.time_elapsed !== undefined && (
-                <span className="stage-time">
-                  Elapsed: {formatTimeHMS(releaseStage.time_elapsed)}
-                </span>
+                <>
+                  <span className="stage-time">
+                    Elapsed: {formatTimeHMS(releaseStage.time_elapsed)}
+                  </span>
+                  <span className="stage-time" style={{ 
+                    color: '#495057',
+                    fontWeight: '600'
+                  }}>
+                    Progress: {Math.min(100, Math.round((releaseStage.time_elapsed / planStage.soak_time) * 100))}%
+                  </span>
+                </>
               )}
               {releaseStage.state.startsWith('done_') && releaseStage.time_done && (
                 <span className="stage-time">
