@@ -9,7 +9,7 @@ export class PlanStorage extends DurableObject<Env> {
   }
 
   async get(): Promise<Plan> {
-    let plan = await this.ctx.storage.get("main") as Plan;
+    let plan = (await this.ctx.storage.get("main")) as Plan;
     if (!plan) {
       plan = {
         stages: [
@@ -50,7 +50,7 @@ export class PlanStorage extends DurableObject<Env> {
   }
 
   async updatePlan(plan: Plan): Promise<Plan> {
-    const _plan = {...plan, time_last_saved: new Date().toISOString()};
+    const _plan = { ...plan, time_last_saved: new Date().toISOString() };
     await this.ctx.storage.put("main", _plan);
     return _plan;
   }

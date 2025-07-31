@@ -1,10 +1,14 @@
-import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
-import { Cloudflare as cf } from 'cloudflare';
-import { components } from '../../types/api';
-import { ReleaseHistory } from './releaseHistory';
-import { StageStorage } from './stage';
-import { SLOEvaluator } from './sloEvaluator';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  WorkflowEntrypoint,
+  WorkflowStep,
+  WorkflowEvent,
+} from "cloudflare:workers";
+import { Cloudflare as cf } from "cloudflare";
+import { components } from "../../types/api";
+import { ReleaseHistory } from "./releaseHistory";
+import { StageStorage } from "./stage";
+import { SLOEvaluator } from "./sloEvaluator";
+import { v4 as uuidv4 } from "uuid";
 
 type StageRef = components["schemas"]["StageRef"];
 type PlanStage = components["schemas"]["PlanStage"];
@@ -16,21 +20,38 @@ export type ReleaseWorkflowParams = {
   apiToken: string;
 };
 
-export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseWorkflowParams> {
+export class ReleaseWorkflow extends WorkflowEntrypoint<
+  Cloudflare.Env,
+  ReleaseWorkflowParams
+> {
   private getReleaseHistory() {
-    return this.env.RELEASE_HISTORY.get(this.env.RELEASE_HISTORY.idFromName("main"));
+    return this.env.RELEASE_HISTORY.get(
+      this.env.RELEASE_HISTORY.idFromName("main"),
+    );
   }
 
   private getStageStorage(releaseId: string, stageOrder: number) {
-    return this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(`release-${releaseId}-order-${stageOrder}`));
+    return this.env.STAGE_STORAGE.get(
+      this.env.STAGE_STORAGE.idFromName(
+        `release-${releaseId}-order-${stageOrder}`,
+      ),
+    );
   }
 
-  private async updateStagesStateBad(releaseId: string, stages: any[], state: "done_cancelled" | "done_failed" | "error", excludeCompleted = true) {
+  private async updateStagesStateBad(
+    releaseId: string,
+    stages: any[],
+    state: "done_cancelled" | "done_failed" | "error",
+    excludeCompleted = true,
+  ) {
     for (const planStage of stages) {
       const stage = this.getStageStorage(releaseId, planStage.order);
       const currentStageData = await stage.get();
-      
-      if (currentStageData && (!excludeCompleted || !currentStageData.state.startsWith('done_'))) {
+
+      if (
+        currentStageData &&
+        (!excludeCompleted || !currentStageData.state.startsWith("done_"))
+      ) {
         await stage.updateStageState(state);
         console.log(`🚫 Set stage ${planStage.order} to ${state}`);
       }
@@ -40,15 +61,20 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
   private client: cf | undefined;
   private accountId: string | undefined;
 
-  async run(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep): Promise<void> {
+  async run(
+    event: WorkflowEvent<ReleaseWorkflowParams>,
+    step: WorkflowStep,
+  ): Promise<void> {
     const { releaseId, accountId, apiToken } = event.payload;
-    const releaseHistory = this.env.RELEASE_HISTORY.get(this.env.RELEASE_HISTORY.idFromName("main"));
-    
+    const releaseHistory = this.env.RELEASE_HISTORY.get(
+      this.env.RELEASE_HISTORY.idFromName("main"),
+    );
+
     let release: Release | undefined;
-    
+
     try {
       release = await releaseHistory.getRelease(releaseId);
-      
+
       if (!release) {
         console.error(`❌ Release ${releaseId} not found!`);
         return;
@@ -77,76 +103,141 @@ Account ID: ${this.accountId}
       await step.do("complete release", async () => {
         // Note: always get the release by id because it might not be active anymore
         const specificRelease = await releaseHistory.getRelease(releaseId);
-        
-        if (specificRelease?.state === 'done_stopped_manually') {
-          console.log(`🛑 Release ${releaseId} was cancelled - reverting deployment`);
-          await this.revertDeployment(releaseId, release!.plan_record.worker_name, release!.old_version);
-        } else if (specificRelease?.state === 'done_failed_slo') {
-          console.log(`💥 Release ${releaseId} failed SLO - reverting deployment`);
-          await this.revertDeployment(releaseId, release!.plan_record.worker_name, release!.old_version);
+
+        if (specificRelease?.state === "done_stopped_manually") {
+          console.log(
+            `🛑 Release ${releaseId} was cancelled - reverting deployment`,
+          );
+          await this.revertDeployment(
+            releaseId,
+            release!.plan_record.worker_name,
+            release!.old_version,
+          );
+        } else if (specificRelease?.state === "done_failed_slo") {
+          console.log(
+            `💥 Release ${releaseId} failed SLO - reverting deployment`,
+          );
+          await this.revertDeployment(
+            releaseId,
+            release!.plan_record.worker_name,
+            release!.old_version,
+          );
         } else {
           // Release completed successfully
           await releaseHistory.updateReleaseState(releaseId, "done_successful");
           console.log(`🎉 Release ${releaseId} completed successfully`);
-          await this.finishDeployment(releaseId, release!.plan_record.worker_name, release!.new_version);
+          await this.finishDeployment(
+            releaseId,
+            release!.plan_record.worker_name,
+            release!.new_version,
+          );
         }
       });
-
     } catch (error) {
       console.error(`💥 Workflow error for release ${releaseId}:`, error);
-      
+
       await step.do("handle workflow error and revert deployment", async () => {
         // Handle workflow error inline to ensure state changes are in workflow step
         const releaseHistory = this.getReleaseHistory();
         const currentRelease = await releaseHistory.getRelease(releaseId);
-        
+
         if (currentRelease) {
-          await this.updateStagesStateBad(releaseId, currentRelease.plan_record.stages, "done_cancelled", true);
+          await this.updateStagesStateBad(
+            releaseId,
+            currentRelease.plan_record.stages,
+            "done_cancelled",
+            true,
+          );
           await releaseHistory.updateReleaseState(releaseId, "error");
         }
-        
+
         if (release) {
-          await this.revertDeployment(releaseId, release.plan_record.worker_name, release.old_version);
+          await this.revertDeployment(
+            releaseId,
+            release.plan_record.worker_name,
+            release.old_version,
+          );
         }
       });
-      
+
       throw error;
     }
   }
 
-  private async processStages(event: WorkflowEvent<ReleaseWorkflowParams>, step: WorkflowStep, release: Release, releaseHistory: DurableObjectStub<ReleaseHistory>) {
+  private async processStages(
+    event: WorkflowEvent<ReleaseWorkflowParams>,
+    step: WorkflowStep,
+    release: Release,
+    releaseHistory: DurableObjectStub<ReleaseHistory>,
+  ) {
     const { releaseId } = event.payload;
-    
-    const updateRemainingStages = async (failureState: "done_cancelled" | "done_failed", currentStageOrder: number) => {
-      const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order > currentStageOrder);
-      console.log(`🔍 Found ${remainingStages.length} remaining stages to update after stage ${currentStageOrder}`);
+
+    const updateRemainingStages = async (
+      failureState: "done_cancelled" | "done_failed",
+      currentStageOrder: number,
+    ) => {
+      const remainingStages = release.plan_record.stages.filter(
+        (s: PlanStage) => s.order > currentStageOrder,
+      );
+      console.log(
+        `🔍 Found ${remainingStages.length} remaining stages to update after stage ${currentStageOrder}`,
+      );
       await this.updateStagesStateBad(releaseId, remainingStages, failureState);
     };
 
     for (const stageRef of release.stages) {
-      const stagePlan = release.plan_record.stages.find((s: PlanStage) => s.order === stageRef.order);
+      const stagePlan = release.plan_record.stages.find(
+        (s: PlanStage) => s.order === stageRef.order,
+      );
       if (!stagePlan) {
         console.error(`❌ No plan found for stage ${stageRef.id}`);
         continue;
       }
-      
-      console.log(`🎬 Starting stage ${stageRef.order}: ${stagePlan.soak_time}s soak`);
-      const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(stageRef.id));
+
+      console.log(
+        `🎬 Starting stage ${stageRef.order}: ${stagePlan.soak_time}s soak`,
+      );
+      const stage = this.env.STAGE_STORAGE.get(
+        this.env.STAGE_STORAGE.idFromName(stageRef.id),
+      );
 
       await step.do(`${stageRef.id} - start`, async () => {
         await stage.updateStageState("running");
-        await this.setDeploymentTarget(releaseId, release.plan_record.worker_name, stagePlan.target_percent, release.old_version, release.new_version);
+        await this.setDeploymentTarget(
+          releaseId,
+          release.plan_record.worker_name,
+          stagePlan.target_percent,
+          release.old_version,
+          release.new_version,
+        );
       });
 
-      const soakResult = await this.processStageSoak(releaseId, release.plan_record.worker_name, step, stageRef, stagePlan);
-      if (soakResult === 'exit') {
-        console.log(`🛑 Stage ${stageRef.order} soak failed - exiting workflow`);
+      const soakResult = await this.processStageSoak(
+        releaseId,
+        release.plan_record.worker_name,
+        step,
+        stageRef,
+        stagePlan,
+      );
+      if (soakResult === "exit") {
+        console.log(
+          `🛑 Stage ${stageRef.order} soak failed - exiting workflow`,
+        );
         return;
       }
       console.log(`🛁 Stage ${stageRef.order} soak completed`);
 
-      const shouldWaitForApproval = await this.handleStageApproval(step, stageRef, stagePlan, release, stage, updateRemainingStages, releaseHistory, releaseId);
-      if (shouldWaitForApproval === 'exit') return;
+      const shouldWaitForApproval = await this.handleStageApproval(
+        step,
+        stageRef,
+        stagePlan,
+        release,
+        stage,
+        updateRemainingStages,
+        releaseHistory,
+        releaseId,
+      );
+      if (shouldWaitForApproval === "exit") return;
 
       await step.do(`${stageRef.id} - done`, async () => {
         await stage.updateStageState("done_successful");
@@ -155,69 +246,129 @@ Account ID: ${this.accountId}
     }
   }
 
-  private async handleExternalCancellation(step: WorkflowStep, releaseId: string, currentStageOrder: number) {
+  private async handleExternalCancellation(
+    step: WorkflowStep,
+    releaseId: string,
+    currentStageOrder: number,
+  ) {
     await step.do("handle external cancellation", async () => {
       const releaseHistory = this.getReleaseHistory();
       const release = await releaseHistory.getRelease(releaseId);
-      
+
       if (release) {
         // Update all non-completed stages to cancelled state
-        const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order >= currentStageOrder);
-        await this.updateStagesStateBad(releaseId, remainingStages, "done_cancelled", true);
-        
+        const remainingStages = release.plan_record.stages.filter(
+          (s: PlanStage) => s.order >= currentStageOrder,
+        );
+        await this.updateStagesStateBad(
+          releaseId,
+          remainingStages,
+          "done_cancelled",
+          true,
+        );
+
         // Update release state to done_stopped_manually
-        await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
-        
+        await releaseHistory.updateReleaseState(
+          releaseId,
+          "done_stopped_manually",
+        );
+
         // Revert deployment to old version
-        await this.revertDeployment(releaseId, release.plan_record.worker_name, release.old_version);
-        
-        console.log(`🛑 External cancellation handled - updated ${remainingStages.length} stages to cancelled, reverted deployment, and set release to stopped`);
+        await this.revertDeployment(
+          releaseId,
+          release.plan_record.worker_name,
+          release.old_version,
+        );
+
+        console.log(
+          `🛑 External cancellation handled - updated ${remainingStages.length} stages to cancelled, reverted deployment, and set release to stopped`,
+        );
       }
     });
   }
 
-  private async handleSLOViolation(step: WorkflowStep, releaseId: string, currentStageOrder: number, currentStageId: string) {
+  private async handleSLOViolation(
+    step: WorkflowStep,
+    releaseId: string,
+    currentStageOrder: number,
+    currentStageId: string,
+  ) {
     await step.do("handle SLO violation", async () => {
       const releaseHistory = this.getReleaseHistory();
       const release = await releaseHistory.getRelease(releaseId);
-      
+
       if (release) {
         // First, explicitly mark the current stage as failed
-        const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(currentStageId));
+        const stage = this.env.STAGE_STORAGE.get(
+          this.env.STAGE_STORAGE.idFromName(currentStageId),
+        );
         await stage.updateStageState("done_failed");
-        
-        // Update all remaining stages (after current) to cancelled state  
-        const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order > currentStageOrder);
-        await this.updateStagesStateBad(releaseId, remainingStages, "done_cancelled", true);
-        
+
+        // Update all remaining stages (after current) to cancelled state
+        const remainingStages = release.plan_record.stages.filter(
+          (s: PlanStage) => s.order > currentStageOrder,
+        );
+        await this.updateStagesStateBad(
+          releaseId,
+          remainingStages,
+          "done_cancelled",
+          true,
+        );
+
         // Update release state to done_failed_slo
         await releaseHistory.updateReleaseState(releaseId, "done_failed_slo");
-        
-        console.log(`💥 SLO violation handled - current stage and ${remainingStages.length} remaining stages marked as failed, release set to SLO failed`);
+
+        console.log(
+          `💥 SLO violation handled - current stage and ${remainingStages.length} remaining stages marked as failed, release set to SLO failed`,
+        );
       }
     });
   }
 
-  private async processStageSoak(releaseId: string, workerName: string, step: WorkflowStep, stageRef: StageRef, stagePlan: PlanStage): Promise<'continue' | 'exit'> {
+  private async processStageSoak(
+    releaseId: string,
+    workerName: string,
+    step: WorkflowStep,
+    stageRef: StageRef,
+    stagePlan: PlanStage,
+  ): Promise<"continue" | "exit"> {
     // Get release to access plan polling configuration
     const releaseHistory = this.getReleaseHistory();
     const release = await releaseHistory.getRelease(releaseId);
-    
+
     // Calculate interval time based on plan-level polling_fraction
     const pollingFraction = release?.plan_record?.polling_fraction || 0.5;
-    const intervalTimeSeconds = Math.max(1, Math.floor(stagePlan.soak_time * pollingFraction));
-    
-    for (let i = 0; i < Math.floor(stagePlan.soak_time / intervalTimeSeconds); i++) {
+    const intervalTimeSeconds = Math.max(
+      1,
+      Math.floor(stagePlan.soak_time * pollingFraction),
+    );
+
+    for (
+      let i = 0;
+      i < Math.floor(stagePlan.soak_time / intervalTimeSeconds);
+      i++
+    ) {
       // Check if release was stopped
       const releaseHistory = this.getReleaseHistory();
       const release = await releaseHistory.getRelease(releaseId);
-      if (release?.state !== 'running') {
-        await this.handleExternalCancellation(step, release?.id || '', stageRef.order);
-        return 'exit';
+      if (release?.state !== "running") {
+        await this.handleExternalCancellation(
+          step,
+          release?.id || "",
+          stageRef.order,
+        );
+        return "exit";
       }
-      await step.sleep(`${stageRef.id} - soak`, `${intervalTimeSeconds} seconds`);
+      await step.sleep(
+        `${stageRef.id} - soak`,
+        `${intervalTimeSeconds} seconds`,
+      );
       console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
-      const wallTimes = await this.getWallTimes(workerName, Date.now() - intervalTimeSeconds * 1000000, Date.now());
+      const wallTimes = await this.getWallTimes(
+        workerName,
+        Date.now() - intervalTimeSeconds * 1000000,
+        Date.now(),
+      );
       // Set observation window to 1 hour for testing
       // const wallTimes = await this.getWallTimes(workerName, Date.now() - 60 * 60 * 1000000, Date.now());
       console.log(`
@@ -230,43 +381,65 @@ P50 Wall: ${wallTimes.median}
       `);
 
       // Get SLO configurations from the release plan
-      const sloConfigs = SLOEvaluator.parseSLOsFromPlan(release!.plan_record.slos);
+      const sloConfigs = SLOEvaluator.parseSLOsFromPlan(
+        release!.plan_record.slos,
+      );
 
       if (sloConfigs.length > 0) {
         // Evaluate SLOs using the new evaluator
         const sloResult = SLOEvaluator.evaluateSLOs(sloConfigs, wallTimes);
-        
-        console.log(`📊 SLO Evaluation: ${sloResult.summary}`);
-        
-        if (!sloResult.passed) {
-          console.log(`🛑 Stage ${stageRef.order} soak failed - SLO violations: ${sloResult.violations.map(v => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(', ')}`);
-          const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(stageRef.id));
-          await stage.addLog(`🛑 SLO violations: ${sloResult.violations.map(v => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(', ')}`);
-          await this.handleSLOViolation(step, release?.id || '', stageRef.order, stageRef.id);
 
-          return 'exit';
+        console.log(`📊 SLO Evaluation: ${sloResult.summary}`);
+
+        if (!sloResult.passed) {
+          console.log(
+            `🛑 Stage ${stageRef.order} soak failed - SLO violations: ${sloResult.violations.map((v) => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(", ")}`,
+          );
+          const stage = this.env.STAGE_STORAGE.get(
+            this.env.STAGE_STORAGE.idFromName(stageRef.id),
+          );
+          await stage.addLog(
+            `🛑 SLO violations: ${sloResult.violations.map((v) => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(", ")}`,
+          );
+          await this.handleSLOViolation(
+            step,
+            release?.id || "",
+            stageRef.order,
+            stageRef.id,
+          );
+
+          return "exit";
         }
-        
-        console.log(`✅ Stage ${stageRef.order} soak passed - All SLOs satisfied`);
+
+        console.log(
+          `✅ Stage ${stageRef.order} soak passed - All SLOs satisfied`,
+        );
       } else {
-        console.log(`⚠️  Stage ${stageRef.order} soak - No SLOs configured, skipping SLO check`);
+        console.log(
+          `⚠️  Stage ${stageRef.order} soak - No SLOs configured, skipping SLO check`,
+        );
       }
     }
-    return 'continue';
+    return "continue";
   }
 
   private async handleStageApproval(
-    step: WorkflowStep, 
-    stageRef: StageRef, 
-    stagePlan: PlanStage, 
-    release: Release, 
-    stage: DurableObjectStub<StageStorage>, 
-    updateRemainingStages: (state: "done_cancelled" | "done_failed", order: number) => Promise<void>,
+    step: WorkflowStep,
+    stageRef: StageRef,
+    stagePlan: PlanStage,
+    release: Release,
+    stage: DurableObjectStub<StageStorage>,
+    updateRemainingStages: (
+      state: "done_cancelled" | "done_failed",
+      order: number,
+    ) => Promise<void>,
     releaseHistory: DurableObjectStub<ReleaseHistory>,
-    releaseId: string
-  ): Promise<'continue' | 'exit'> {
-    const isLastStage = stageRef.order === Math.max(...release.plan_record.stages.map((s: PlanStage) => s.order));
-    
+    releaseId: string,
+  ): Promise<"continue" | "exit"> {
+    const isLastStage =
+      stageRef.order ===
+      Math.max(...release.plan_record.stages.map((s: PlanStage) => s.order));
+
     if (!stagePlan.auto_progress && !isLastStage) {
       await step.do(`${stageRef.id} - set awaiting approval`, async () => {
         await stage.updateStageState("awaiting_approval");
@@ -275,41 +448,58 @@ P50 Wall: ${wallTimes.median}
 
       // Check if release has been stopped
       const currentRelease = await releaseHistory.getRelease(releaseId);
-      if (!currentRelease || currentRelease.state !== 'running') {
+      if (!currentRelease || currentRelease.state !== "running") {
         console.log(`🛑 Release ${releaseId} was stopped during approval wait`);
         await this.handleExternalCancellation(step, releaseId, stageRef.order);
-        return 'exit';
+        return "exit";
       }
 
-      const waitForApproval = await step.waitForEvent(`Waiting for stage ${stageRef.id} approval`, {
-        type: `${stageRef.id}-user-progress-command`,
-      });
+      const waitForApproval = await step.waitForEvent(
+        `Waiting for stage ${stageRef.id} approval`,
+        {
+          type: `${stageRef.id}-user-progress-command`,
+        },
+      );
 
       if (waitForApproval.payload === "approve") {
         console.log(`✔️ Stage ${stageRef.order} approved`);
-        return 'continue';
+        return "continue";
       } else if (waitForApproval.payload === "deny") {
         console.log(`❌ Stage ${stageRef.order} denied - stopping release`);
-        
-        await step.do(`Cancel stage ${stageRef.id} and remaining stages`, async () => {
-          await stage.updateStageState("done_cancelled");
-          await updateRemainingStages("done_cancelled", stageRef.order);
-          await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
-          console.log(`🛑 Release stopped - stage ${stageRef.order} denied`);
-          // Revert deployment when release is manually cancelled
-          await this.revertDeployment(releaseId, release.plan_record.worker_name, release.old_version);
-        });
-        
-        return 'exit';
+
+        await step.do(
+          `Cancel stage ${stageRef.id} and remaining stages`,
+          async () => {
+            await stage.updateStageState("done_cancelled");
+            await updateRemainingStages("done_cancelled", stageRef.order);
+            await releaseHistory.updateReleaseState(
+              releaseId,
+              "done_stopped_manually",
+            );
+            console.log(`🛑 Release stopped - stage ${stageRef.order} denied`);
+            // Revert deployment when release is manually cancelled
+            await this.revertDeployment(
+              releaseId,
+              release.plan_record.worker_name,
+              release.old_version,
+            );
+          },
+        );
+
+        return "exit";
       }
     }
-    
-    return 'continue';
+
+    return "continue";
   }
 
-
-
-  private async setDeploymentTarget(releaseId: string, worker_name: string, target_percent: number, old_version_id: string, new_version_id: string) {
+  private async setDeploymentTarget(
+    releaseId: string,
+    worker_name: string,
+    target_percent: number,
+    old_version_id: string,
+    new_version_id: string,
+  ) {
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
@@ -322,22 +512,26 @@ New Version: ${new_version_id} (${target_percent}%)
       account_id: this.accountId!,
       strategy: "percentage",
       versions: [
-          {
-            percentage: target_percent,
-            version_id: new_version_id,
-          },
-          {
-            percentage: 100 - target_percent,
-            version_id: old_version_id,
-          },
-        ],
-        annotations: {
-          "workers/message": `Workers HMD Release ${releaseId} - in progress`,
+        {
+          percentage: target_percent,
+          version_id: new_version_id,
         },
-      });
+        {
+          percentage: 100 - target_percent,
+          version_id: old_version_id,
+        },
+      ],
+      annotations: {
+        "workers/message": `Workers HMD Release ${releaseId} - in progress`,
+      },
+    });
   }
 
-  private async finishDeployment(releaseId: string, worker_name: string, new_version_id: string) {
+  private async finishDeployment(
+    releaseId: string,
+    worker_name: string,
+    new_version_id: string,
+  ) {
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
@@ -360,7 +554,11 @@ Finishing deployment with new version: ${new_version_id}
     });
   }
 
-  private async revertDeployment(releaseId: string, worker_name: string, old_version_id: string) {
+  private async revertDeployment(
+    releaseId: string,
+    worker_name: string,
+    old_version_id: string,
+  ) {
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
@@ -383,12 +581,16 @@ Reverting to old version: ${old_version_id}
     });
   }
 
-  private async getWallTimes(workerName: string, from: number, to: number): Promise<{ p999: number, p99: number, p90: number, median: number }> {
+  private async getWallTimes(
+    workerName: string,
+    from: number,
+    to: number,
+  ): Promise<{ p999: number; p99: number; p90: number; median: number }> {
     try {
       // TODO replace with client.workers.observability.telemetry.query
       const apiToken = this.client!.apiToken;
       const url = `https://api.cloudflare.com/client/v4/accounts/${this.accountId!}/workers/observability/telemetry/query`;
-      
+
       const requestBody = {
         view: "calculations",
         limit: 10,
@@ -402,8 +604,8 @@ Reverting to old version: ${old_version_id}
               operation: "eq",
               value: workerName,
               type: "string",
-              id: uuidv4()
-            }
+              id: uuidv4(),
+            },
           ],
           calculations: [
             {
@@ -411,68 +613,85 @@ Reverting to old version: ${old_version_id}
               keyType: "number",
               operator: "p999",
               alias: "P999 Wall",
-              id:   uuidv4()
+              id: uuidv4(),
             },
             {
               key: "$workers.wallTimeMs",
               keyType: "number",
               operator: "p99",
               alias: "P99 Wall",
-              id: uuidv4()
+              id: uuidv4(),
             },
             {
               key: "$workers.wallTimeMs",
               keyType: "number",
               operator: "p90",
               alias: "P90 Wall",
-              id: uuidv4()
+              id: uuidv4(),
             },
             {
               key: "$workers.wallTimeMs",
               keyType: "number",
               operator: "median",
               alias: "P50 Wall",
-              id: uuidv4()
-            }
+              id: uuidv4(),
+            },
           ],
           groupBys: [],
-          havings: []
+          havings: [],
         },
         timeframe: {
           from,
-          to
-        }
+          to,
+        },
       };
 
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiToken}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error(`Observability API request failed: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Observability API request failed: ${response.status} ${response.statusText}`,
+        );
       }
 
-      const responseData = await response.json() as any;
-      
+      const responseData = (await response.json()) as any;
+
       // Extract the percentile values from the response
       const calculations = responseData.result?.calculations || [];
-      
+
       // Find the calculation results from aggregates
-      let p999 = 0, p99 = 0, p90 = 0, median = 0;
-      
+      let p999 = 0,
+        p99 = 0,
+        p90 = 0,
+        median = 0;
+
       for (const calculation of calculations) {
-        if (calculation.alias === 'P999 Wall' && calculation.aggregates?.length > 0) {
+        if (
+          calculation.alias === "P999 Wall" &&
+          calculation.aggregates?.length > 0
+        ) {
           p999 = calculation.aggregates[0].value;
-        } else if (calculation.alias === 'P99 Wall' && calculation.aggregates?.length > 0) {
+        } else if (
+          calculation.alias === "P99 Wall" &&
+          calculation.aggregates?.length > 0
+        ) {
           p99 = calculation.aggregates[0].value;
-        } else if (calculation.alias === 'P90 Wall' && calculation.aggregates?.length > 0) {
+        } else if (
+          calculation.alias === "P90 Wall" &&
+          calculation.aggregates?.length > 0
+        ) {
           p90 = calculation.aggregates[0].value;
-        } else if (calculation.alias === 'P50 Wall' && calculation.aggregates?.length > 0) {
+        } else if (
+          calculation.alias === "P50 Wall" &&
+          calculation.aggregates?.length > 0
+        ) {
           median = calculation.aggregates[0].value;
         }
       }
@@ -481,11 +700,13 @@ Reverting to old version: ${old_version_id}
         p999,
         p99,
         p90,
-        median
+        median,
       };
-
     } catch (error) {
-      console.error('Failed to fetch wall times from observability API:', error);
+      console.error(
+        "Failed to fetch wall times from observability API:",
+        error,
+      );
       throw error;
     }
   }

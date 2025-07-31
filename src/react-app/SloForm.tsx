@@ -1,8 +1,8 @@
-import React from 'react';
-import './SloForm.css';
+import React from "react";
+import "./SloForm.css";
 
 export interface SloFormData {
-  percentile: 'p999' | 'p99' | 'p90' | 'median';
+  percentile: "p999" | "p99" | "p90" | "median";
   latency_ms: number;
 }
 
@@ -12,20 +12,24 @@ interface SloFormProps {
   onValidationError: (error: string | null) => void;
 }
 
-const SloForm: React.FC<SloFormProps> = ({ value, onChange, onValidationError }) => {
+const SloForm: React.FC<SloFormProps> = ({
+  value,
+  onChange,
+  onValidationError,
+}) => {
   // Use the external value directly, no internal state needed
   const formData = value || {
-    percentile: 'p99',
-    latency_ms: 100
+    percentile: "p99",
+    latency_ms: 100,
   };
 
   // Validate form data
   const validateForm = (data: SloFormData): string | null => {
     if (data.latency_ms <= 0) {
-      return 'Latency must be greater than 0ms';
+      return "Latency must be greater than 0ms";
     }
     if (data.latency_ms > 60000) {
-      return 'Latency must be less than 60000ms (1 minute)';
+      return "Latency must be less than 60000ms (1 minute)";
     }
     return null;
   };
@@ -39,7 +43,7 @@ const SloForm: React.FC<SloFormProps> = ({ value, onChange, onValidationError })
   const handlePercentileChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onChange({
       ...formData,
-      percentile: e.target.value as SloFormData['percentile']
+      percentile: e.target.value as SloFormData["percentile"],
     });
   };
 
@@ -47,11 +51,9 @@ const SloForm: React.FC<SloFormProps> = ({ value, onChange, onValidationError })
     const latency_ms = parseInt(e.target.value) || 0;
     onChange({
       ...formData,
-      latency_ms
+      latency_ms,
     });
   };
-
-
 
   return (
     <div className="slo-form">

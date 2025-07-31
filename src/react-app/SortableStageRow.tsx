@@ -1,8 +1,8 @@
-import React from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { TimeInput } from './TimeInput';
-import { PlanStage } from './types';
+import React from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { TimeInput } from "./TimeInput";
+import { PlanStage } from "./types";
 
 interface SortableStageRowProps {
   stage: PlanStage;
@@ -40,24 +40,26 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
     onUpdate(stage.order, { [field]: value });
   };
 
-  const handleTargetPercentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTargetPercentChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     // Don't allow changes to target percent for the last stage
     if (isLastStage) {
       return;
     }
-    
+
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 0 && value <= 100) {
-      handleInputChange('target_percent', value);
+      handleInputChange("target_percent", value);
     }
   };
 
   const handleAutoProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleInputChange('auto_progress', e.target.checked);
+    handleInputChange("auto_progress", e.target.checked);
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleInputChange('description', e.target.value);
+    handleInputChange("description", e.target.value);
   };
 
   const handleSoakTimeChange = (seconds: number) => {
@@ -68,20 +70,20 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`table-row ${isDragging ? 'dragging' : ''} ${isLastStage ? 'last-stage' : ''}`}
+      className={`table-row ${isDragging ? "dragging" : ""} ${isLastStage ? "last-stage" : ""}`}
     >
       <div className="col-order">
         <div
-          className={`drag-handle ${isLastStage ? 'disabled' : ''}`}
+          className={`drag-handle ${isLastStage ? "disabled" : ""}`}
           {...(isLastStage ? {} : attributes)}
           {...(isLastStage ? {} : listeners)}
           title={isLastStage ? "Final stage (locked)" : "Drag to reorder"}
         >
-          {isLastStage ? '🔒' : '⋮⋮'}
+          {isLastStage ? "🔒" : "⋮⋮"}
         </div>
         <span className="stage-number">{stage.order}</span>
       </div>
-      
+
       <div className="col-percent">
         <div className="input-container">
           <input
@@ -90,19 +92,17 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
             max="100"
             value={stage.target_percent}
             onChange={handleTargetPercentChange}
-            className={`percent-input ${isLastStage ? 'locked' : ''} ${validationError ? 'error' : ''}`}
+            className={`percent-input ${isLastStage ? "locked" : ""} ${validationError ? "error" : ""}`}
             readOnly={isLastStage}
             title={isLastStage ? "Final stage is locked at 100%" : ""}
           />
           <span>%</span>
           {validationError && (
-            <div className="validation-error">
-              {validationError}
-            </div>
+            <div className="validation-error">{validationError}</div>
           )}
         </div>
       </div>
-      
+
       <div className="col-soak">
         <div className="input-container">
           <TimeInput
@@ -113,13 +113,11 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
             min={1}
           />
           {soakValidationError && (
-            <div className="validation-error">
-              {soakValidationError}
-            </div>
+            <div className="validation-error">{soakValidationError}</div>
           )}
         </div>
       </div>
-      
+
       {!isLastStage && (
         <div className="col-auto">
           <input
@@ -130,19 +128,19 @@ export const SortableStageRow: React.FC<SortableStageRowProps> = ({
           />
         </div>
       )}
-      
+
       {!isLastStage && (
         <div className="col-description">
           <input
             type="text"
-            value={stage.description || ''}
+            value={stage.description || ""}
             onChange={handleDescriptionChange}
             placeholder="description..."
             className="description-input"
           />
         </div>
       )}
-      
+
       {!isLastStage && (
         <div className="col-actions">
           <button

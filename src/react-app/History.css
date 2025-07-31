@@ -82,11 +82,11 @@
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .date-search-inputs {
     justify-content: center;
   }
-  
+
   .date-search-buttons {
     justify-content: center;
   }
@@ -159,7 +159,7 @@
 .history-id {
   font-size: 0.75em;
   color: #666;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
 }
 
 .history-timestamps {
@@ -192,7 +192,7 @@
 .history-timestamp {
   font-size: 0.75em;
   color: #666;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
 }
 
 .history-details {
@@ -261,7 +261,7 @@
 .stage-soak {
   font-size: 0.875em;
   color: #666;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
 }
 
 .stage-description {
@@ -283,7 +283,7 @@
   background-color: #ffffff;
   font-size: 0.875em;
   color: #333;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
 }
 
 /* Pagination Controls */
@@ -303,7 +303,7 @@
 }
 
 .loading-more::before {
-  content: '';
+  content: "";
   width: 1em;
   height: 1em;
   border: 2px solid #e0e0e0;
@@ -318,16 +318,16 @@
     flex-direction: column;
     gap: 1em;
   }
-  
+
   .history-timestamps {
     align-items: flex-start;
   }
-  
+
   .history-summary {
     flex-direction: column;
     gap: 1em;
   }
-  
+
   .stages-grid {
     grid-template-columns: 1fr;
   }

@@ -73,7 +73,7 @@
 .timestamp-info {
   color: #666;
   font-size: 0.75em;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
   display: block;
 }
 
@@ -206,7 +206,7 @@
   color: #666;
   width: 8em;
   flex-shrink: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: "Roboto Mono", monospace;
   font-size: 0.875em;
 }
 
@@ -342,13 +342,13 @@
     grid-template-columns: 1fr;
     gap: 1.5em;
   }
-  
+
   .release-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5em;
   }
-  
+
   .stage-info {
     flex-direction: column;
     align-items: flex-start;

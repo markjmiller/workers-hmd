@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import './TimeInput.css';
+import React, { useState, useEffect } from "react";
+import "./TimeInput.css";
 
 interface TimeInputProps {
   value: number; // Time in seconds
@@ -12,7 +12,7 @@ interface TimeInputProps {
 export const TimeInput: React.FC<TimeInputProps> = ({
   value,
   onChange,
-  className = '',
+  className = "",
   error = false,
   min = 1,
 }) => {
@@ -25,36 +25,49 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   };
 
   // Convert H:M:S components to total seconds
-  const componentsToSeconds = (hours: number, minutes: number, seconds: number) => {
-    return (hours * 3600) + (minutes * 60) + seconds;
+  const componentsToSeconds = (
+    hours: number,
+    minutes: number,
+    seconds: number,
+  ) => {
+    return hours * 3600 + minutes * 60 + seconds;
   };
 
   const { hours, minutes, seconds } = secondsToComponents(value);
   const [hoursStr, setHoursStr] = useState(hours.toString());
-  const [minutesStr, setMinutesStr] = useState(minutes.toString().padStart(2, '0'));
-  const [secondsStr, setSecondsStr] = useState(seconds.toString().padStart(2, '0'));
+  const [minutesStr, setMinutesStr] = useState(
+    minutes.toString().padStart(2, "0"),
+  );
+  const [secondsStr, setSecondsStr] = useState(
+    seconds.toString().padStart(2, "0"),
+  );
 
   // Update local state when value prop changes
   useEffect(() => {
     const { hours, minutes, seconds } = secondsToComponents(value);
     setHoursStr(hours.toString());
-    setMinutesStr(minutes.toString().padStart(2, '0'));
-    setSecondsStr(seconds.toString().padStart(2, '0'));
+    setMinutesStr(minutes.toString().padStart(2, "0"));
+    setSecondsStr(seconds.toString().padStart(2, "0"));
   }, [value]);
 
-  const handleFieldChange = (field: 'hours' | 'minutes' | 'seconds', newValue: string) => {
+  const handleFieldChange = (
+    field: "hours" | "minutes" | "seconds",
+    newValue: string,
+  ) => {
     let numValue = parseInt(newValue, 10);
     if (isNaN(numValue) || numValue < 0) numValue = 0;
 
     // Apply field-specific constraints
-    if (field === 'minutes' || field === 'seconds') {
+    if (field === "minutes" || field === "seconds") {
       numValue = Math.min(numValue, 59);
     }
 
     // Update local state
-    let newHours = field === 'hours' ? numValue : parseInt(hoursStr, 10) || 0;
-    let newMinutes = field === 'minutes' ? numValue : parseInt(minutesStr, 10) || 0;
-    let newSeconds = field === 'seconds' ? numValue : parseInt(secondsStr, 10) || 0;
+    let newHours = field === "hours" ? numValue : parseInt(hoursStr, 10) || 0;
+    let newMinutes =
+      field === "minutes" ? numValue : parseInt(minutesStr, 10) || 0;
+    let newSeconds =
+      field === "seconds" ? numValue : parseInt(secondsStr, 10) || 0;
 
     const totalSeconds = componentsToSeconds(newHours, newMinutes, newSeconds);
 
@@ -64,17 +77,17 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     }
 
     // Update display regardless (for immediate visual feedback)
-    if (field === 'hours') setHoursStr(newValue);
-    if (field === 'minutes') setMinutesStr(newValue);
-    if (field === 'seconds') setSecondsStr(newValue);
+    if (field === "hours") setHoursStr(newValue);
+    if (field === "minutes") setMinutesStr(newValue);
+    if (field === "seconds") setSecondsStr(newValue);
   };
 
-  const handleFieldBlur = (field: 'hours' | 'minutes' | 'seconds') => {
+  const handleFieldBlur = (field: "hours" | "minutes" | "seconds") => {
     // Ensure proper formatting on blur
     const { hours, minutes, seconds } = secondsToComponents(value);
-    if (field === 'hours') setHoursStr(hours.toString());
-    if (field === 'minutes') setMinutesStr(minutes.toString().padStart(2, '0'));
-    if (field === 'seconds') setSecondsStr(seconds.toString().padStart(2, '0'));
+    if (field === "hours") setHoursStr(hours.toString());
+    if (field === "minutes") setMinutesStr(minutes.toString().padStart(2, "0"));
+    if (field === "seconds") setSecondsStr(seconds.toString().padStart(2, "0"));
   };
 
   const handleFieldFocus = (event: React.FocusEvent<HTMLInputElement>) => {
@@ -82,14 +95,16 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   };
 
   return (
-    <div className={`time-input-container ${className} ${error ? 'error' : ''}`}>
+    <div
+      className={`time-input-container ${className} ${error ? "error" : ""}`}
+    >
       <div className="time-input-fields">
         <input
           type="number"
           min="0"
           value={hoursStr}
-          onChange={(e) => handleFieldChange('hours', e.target.value)}
-          onBlur={() => handleFieldBlur('hours')}
+          onChange={(e) => handleFieldChange("hours", e.target.value)}
+          onBlur={() => handleFieldBlur("hours")}
           onFocus={handleFieldFocus}
           className="time-input-field hours"
           title="Hours"
@@ -100,8 +115,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
           min="0"
           max="59"
           value={minutesStr}
-          onChange={(e) => handleFieldChange('minutes', e.target.value)}
-          onBlur={() => handleFieldBlur('minutes')}
+          onChange={(e) => handleFieldChange("minutes", e.target.value)}
+          onBlur={() => handleFieldBlur("minutes")}
           onFocus={handleFieldFocus}
           className="time-input-field minutes"
           title="Minutes (0-59)"
@@ -112,8 +127,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
           min="0"
           max="59"
           value={secondsStr}
-          onChange={(e) => handleFieldChange('seconds', e.target.value)}
-          onBlur={() => handleFieldBlur('seconds')}
+          onChange={(e) => handleFieldChange("seconds", e.target.value)}
+          onBlur={() => handleFieldBlur("seconds")}
           onFocus={handleFieldFocus}
           className="time-input-field seconds"
           title="Seconds (0-59)"

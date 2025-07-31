@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { AppTabs } from './AppTabs';
-import { ReleasePlanTable } from './ReleasePlanTable';
-import { WorkerInfo } from './WorkerInfo';
-import { api } from './utils';
+import React, { useState, useEffect } from "react";
+import { AppTabs } from "./AppTabs";
+import { ReleasePlanTable } from "./ReleasePlanTable";
+import { WorkerInfo } from "./WorkerInfo";
+import { api } from "./utils";
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
@@ -14,25 +14,33 @@ interface PlanEditorProps {
   saveSuccess: boolean;
 }
 
-const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) => {
-  const [saveValidationError, setSaveValidationError] = useState<string>('');
-  const [hasValidationErrors, setHasValidationErrors] = useState<boolean>(false);
+const PlanEditor: React.FC<PlanEditorProps> = ({
+  plan,
+  onSave,
+  saveSuccess,
+}) => {
+  const [saveValidationError, setSaveValidationError] = useState<string>("");
+  const [hasValidationErrors, setHasValidationErrors] =
+    useState<boolean>(false);
   const [showJsonView, setShowJsonView] = useState<boolean>(false);
-  const [workerInfo, setWorkerInfo] = useState<{name: string, accountId: string} | null>(null);
+  const [workerInfo, setWorkerInfo] = useState<{
+    name: string;
+    accountId: string;
+  } | null>(null);
   const getCurrentPlanRef = React.useRef<(() => Plan) | null>(null);
 
   // Load worker info from session storage on component mount
   React.useEffect(() => {
-    const savedConnection = sessionStorage.getItem('workerConnection');
+    const savedConnection = sessionStorage.getItem("workerConnection");
     if (savedConnection) {
       try {
         const connection = JSON.parse(savedConnection);
         setWorkerInfo({
           name: connection.workerName,
-          accountId: connection.accountId
+          accountId: connection.accountId,
         });
       } catch (error) {
-        console.error('Error parsing worker connection:', error);
+        console.error("Error parsing worker connection:", error);
       }
     }
   }, []);
@@ -47,23 +55,29 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
 
   const handleSave = () => {
     // Clear any previous validation errors
-    setSaveValidationError('');
-    
+    setSaveValidationError("");
+
     // Get current plan data from the ReleasePlanTable component
     if (!getCurrentPlanRef.current) {
-      setSaveValidationError('Unable to get current plan data');
+      setSaveValidationError("Unable to get current plan data");
       return;
     }
-    
+
     const currentPlan = getCurrentPlanRef.current();
-    
+
     // Validate stages
-    const sortedStages = [...currentPlan.stages].sort((a, b) => a.order - b.order);
-    
+    const sortedStages = [...currentPlan.stages].sort(
+      (a, b) => a.order - b.order,
+    );
+
     // Ensure percentages are in ascending order
     for (let i = 1; i < sortedStages.length; i++) {
-      if (sortedStages[i].target_percent <= sortedStages[i - 1].target_percent) {
-        setSaveValidationError(`Stage ${i + 1} must have a higher target percentage than stage ${i}`);
+      if (
+        sortedStages[i].target_percent <= sortedStages[i - 1].target_percent
+      ) {
+        setSaveValidationError(
+          `Stage ${i + 1} must have a higher target percentage than stage ${i}`,
+        );
         return;
       }
     }
@@ -74,7 +88,7 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
       worker_name: currentPlan.worker_name,
       polling_fraction: currentPlan.polling_fraction,
     };
-    
+
     onSave(validatedPlan);
   };
 
@@ -82,20 +96,20 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
     <>
       {/* Worker Info Display */}
       {workerInfo && (
-        <WorkerInfo 
+        <WorkerInfo
           workerName={workerInfo.name}
           accountId={workerInfo.accountId}
           linkPath="production"
         />
       )}
-      
+
       {saveValidationError && (
         <div className="save-validation-error">
           <span className="error-icon">⚠️</span>
           <span className="error-message">{saveValidationError}</span>
         </div>
       )}
-      
+
       <ReleasePlanTable
         initialPlan={plan}
         onGetCurrentPlan={handleGetCurrentPlan}
@@ -103,8 +117,8 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
         showJsonView={showJsonView}
       />
 
-      <hr className="plan-tabs-separator"/>
-      
+      <hr className="plan-tabs-separator" />
+
       <div className="plan-tabs-bottom-container">
         <div className="plan-tabs-bottom-left">
           {saveSuccess && (
@@ -122,14 +136,14 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
         </div>
         <div className="plan-tabs-bottom-right">
           <label className="plan-tabs-json-label">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={showJsonView}
               onChange={(e) => setShowJsonView(e.target.checked)}
             />
             JSON View
           </label>
-          <button 
+          <button
             onClick={handleSave}
             className="nice-button"
             disabled={hasValidationErrors}
@@ -163,12 +177,13 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
       try {
         setLoading(true);
         setError(null);
-        
+
         const planData: Plan = await api.getPlan();
         setPlan(planData);
       } catch (err) {
-        console.error('Error fetching plan:', err);
-        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch plan';
+        console.error("Error fetching plan:", err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch plan";
         setError(errorMessage);
         if (onError) {
           onError(errorMessage);
@@ -184,24 +199,24 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   const handleSave = async (updatedPlan: Plan) => {
     try {
       setSaveSuccess(false); // Clear any previous success state
-      
+
       // Get worker connection details from session storage
-      const workerConnectionStr = sessionStorage.getItem('workerConnection');
+      const workerConnectionStr = sessionStorage.getItem("workerConnection");
       let planWithWorkerDetails = { ...updatedPlan };
-      
+
       if (workerConnectionStr) {
         try {
           const workerConnection = JSON.parse(workerConnectionStr);
           planWithWorkerDetails = {
             ...updatedPlan,
-            worker_name: workerConnection.workerName
+            worker_name: workerConnection.workerName,
           };
         } catch (parseError) {
-          console.error('Error parsing worker connection:', parseError);
+          console.error("Error parsing worker connection:", parseError);
           // Continue with plan save without worker details
         }
       }
-      
+
       const data = await api.updatePlan(planWithWorkerDetails);
       setPlan(data);
       setSaveSuccess(true); // Show success message
@@ -209,8 +224,8 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error('Error saving plan:', error);
-      const errorMessage = `Failed to save plan: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error("Error saving plan:", error);
+      const errorMessage = `Failed to save plan: ${error instanceof Error ? error.message : "Unknown error"}`;
       alert(errorMessage);
       if (onError) {
         onError(errorMessage);
@@ -225,9 +240,7 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   if (loading) {
     return (
       <div className="loading-container">
-        <div className="loading-text">
-          Loading release plan...
-        </div>
+        <div className="loading-text">Loading release plan...</div>
         <div className="loading-spinner"></div>
       </div>
     );
@@ -240,10 +253,7 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
           <h3 className="error-title">Error Loading Plan</h3>
           <p className="error-message">{error}</p>
         </div>
-        <button 
-          onClick={handleRetry}
-          className="retry-button"
-        >
+        <button onClick={handleRetry} className="retry-button">
           Retry
         </button>
       </div>
@@ -257,10 +267,7 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
           <h3 className="error-title">No Plan Found</h3>
           <p className="error-message">No release plan was found.</p>
         </div>
-        <button 
-          onClick={handleRetry}
-          className="retry-button"
-        >
+        <button onClick={handleRetry} className="retry-button">
           Retry
         </button>
       </div>
@@ -269,7 +276,9 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
 
   return (
     <AppTabs
-      planEditor={<PlanEditor plan={plan} onSave={handleSave} saveSuccess={saveSuccess} />}
+      planEditor={
+        <PlanEditor plan={plan} onSave={handleSave} saveSuccess={saveSuccess} />
+      }
     />
   );
 };

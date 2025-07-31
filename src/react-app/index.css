@@ -55,14 +55,24 @@ button:focus-visible {
 
 /* Common Animations */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.6; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 /* Common Utility Classes */
@@ -85,7 +95,7 @@ button:focus-visible {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'Roboto', sans-serif;
+  font-family: "Roboto", sans-serif;
 }
 
 .nice-button:hover:not(:disabled) {
