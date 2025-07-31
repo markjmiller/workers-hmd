@@ -1,14 +1,18 @@
 # Workers HMD
 
-An Health Mediated Deployments feature for Workers is a system that facilitates the staged, gradual rollout of new Workers versions to production. It integrates directly with Workers Observability for health metrics.
+Workers Health Mediated Deployments (HMD) is a system that facilitates the staged, gradual rollout of new Workers [versions](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/) to production. It integrates directly with [Workers Observability](https://developers.cloudflare.com/workers/observability/) for health metrics.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/markjmiller/workers-hmd)
+
+![app-image](./public/app-image.png)
 
 ## Without HMD
 
 The manual way to do this is to…
 1. Create a new Worker version
-2. Create a new deployment with 100% vCurrent and 0% vNew
-3. Increment the deployment percent by a little bit and monitor health metrics for a time period
-4. Decide to progress the percentage–or abort and set the deployment back to 100% vCurrent
+2. Create a new deployment with something like 90% vCurrent and 10% vNew
+3. Monitor health metrics for a time period then decide to progress or cancel the deployment (and then revert to 100% vCurrent) 
+4. Then increment the deployment percent by a little bit and repeat
 5. Keep incrementing until you reach 100%, each time waiting and monitoring
 
 So tedious… this should be automated!
@@ -17,7 +21,7 @@ So tedious… this should be automated!
 
 Here's how the feature works:
 1. **Release Definition**: users define a release plan with…
-  * SLOs based on SLIs sourced from Workers Observability
+  * [Service Level Objectives](https://sre.google/sre-book/service-level-objectives/) (SLOs) based on Service Level Indicators (SLIs) sourced from Workers Observability
   * Customizable stages that define…
     * % rollout
     * Soak time
@@ -30,31 +34,79 @@ Here's how the feature works:
   * Crucially, if an SLO is violated at any point, the rollout automatically aborts. The deployment is immediately reverted to 100% of the old Worker version, and the new version receives 0% of the traffic.
 6. **Completion**: If all stages successfully pass without SLO violations, the new Worker version reached 100% deployment, meaning all production traffic is now routed to it. At this point, the release is considered complete.
 
+## Instructions
+
+### 1. Connect your Worker
+
+- [Find your account id](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)
+- [Get your API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+
+![connect-worker](./public/connect-worker.png)
+
+Then you should see...
+
+![connect-worker](./public/worker-connected.png)
+
+### 2. Create a release plan
+
+Set polling rate and SLOs:
+
+![release-plan-slos](./public/release-plan-slos.png)
+
+Configure stages (and don't forget to hit save!):
+
+![release-plan-stages](./public/release-plan-stages.png)
+
+### 3. Start a release
+
+Select which Workers versions you want to roll out to.
+
+![release-versions](./public/release-versions.png)
+
+Then click create release! You'll get live updates of your release progress:
+
+![release-progress](./public/release-progress.png)
+
+### 4. See history and why releases failed
+
+![historical-fail](./public/historical-fail.png)
+
+Or a successful deployment!
+
+![historical-success](./public/historical-success.png)
+
+## Architecture
+
+- [Cloudflare Workers](https://developers.cloudflare.com/workers/) and [vite](https://vite.dev/)
+- [Durable Objects](https://developers.cloudflare.com/workers/durable-objects/) for all app state
+- [Workflows](https://developers.cloudflare.com/workers/workflows/) to power the release stages
+- [Workers Observability](https://developers.cloudflare.com/workers/observability/) to get health metrics
+- One project with no infrastructure dependencies and a single deploy command!
+
 ## Dev
 
-    "generate-types": "openapi-typescript ./schemas/api.yaml -o ./types/api.d.ts",
-    "cf-typegen": "wrangler types ./types/worker-configuration.d.ts",
-    "check": "tsc && vite build && wrangler deploy --dry-run",
-    "deploy": "npm run build && wrangler deploy",
-    "dev": "vite",
-    "preview": "npm run build && vite preview",
-    "build": "tsc -b && vite build && npm run render-api-docs",
-    "lint": "prettier ./src --write",
-    "test": "node test/test_endpoint.js",
-    "lint-openapi": "npx @redocly/cli lint ./schemas/api.yaml",
-    "preview-openapi": "npx @redocly/cli preview-docs -p 8888 ./schemas/api.yaml",
+| Command | Description |
+|---------|-----------|
+| `npm run dev` | **Start development server** - Most commonly used for local development |
+| `npm run deploy` | **Deploy to Cloudflare** - Push your changes to production |
+| `npm run build` | **Build for production** - Compile TypeScript, bundle assets, and generate API docs |
+| `npm run check` | **Pre-deployment validation** - Verify code compiles and deployment readiness |
+| `npm run lint` | **Format code** - Auto-format source code with Prettier |
+| `npm run preview` | **Preview built app** - Test the production build locally |
+| `npm run generate-types` | **Generate TypeScript types** - Run when OpenAPI schema is modified |
+| `npm run cf-typegen` | **Generate Worker types** - Run when new Cloudflare bindings are added |
+| `npm run lint-openapi` | **Validate OpenAPI schema** - Check API documentation for errors |
+| `npm run preview-openapi` | **Preview API docs** - View OpenAPI documentation in browser |
 
 ## Simulation
 
-Here's a simple Worker and script you can run to simulate unhealthy SLOs. The `rate=100` url param will cause 1 in 100 requests to have a larger latency. Uncomment the 500 error line to simulate 500 errors. In the HMD app, the Worker is called `simulated-service`. Set iterations to something like ten thousand or a million to just keep it running during an HMD release.
+Here's a simple Worker and script you can run to simulate unhealthy SLOs. The `rate=100` url param will cause 1 in 100 requests to have a large latency. Uncomment the 500 error line to simulate 500 errors. Set iterations to something like ten thousand or a million to just keep it running during an HMD release.
 
 ```bash
 export cf_account_id="replace-me"
 export cf_api_token="replace-me"
 export cf_subdomain="replace-me"
-```
 
-```bash
 curl "https://api.cloudflare.com/client/v4/accounts/$cf_account_id/workers/scripts/simulated-service" \
   -X PUT \
   -H "Authorization: Bearer $cf_api_token" \

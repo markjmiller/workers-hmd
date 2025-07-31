@@ -60,8 +60,18 @@ export const Instructions: React.FC = () => {
             <strong>Welcome to Workers HMD!</strong>
           </p>
           <p style={{ margin: "0 0 1rem 0" }}>
-            This section will contain detailed instructions on how to use the
-            Workers Health Mediated Deployment system.
+            Read the docs on{" "}
+            <a href="https://github.com/markjmiller/workers-hmd/blob/main/README.md">
+              github
+            </a>
+            . You can deploy your own version of this:
+            <br />
+            <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/markjmiller/workers-hmd">
+              <img
+                src="https://deploy.workers.cloudflare.com/button"
+                alt="Deploy to Cloudflare"
+              />
+            </a>
           </p>
           <div
             style={{
@@ -71,14 +81,53 @@ export const Instructions: React.FC = () => {
               marginBottom: "1rem",
             }}
           >
-            <em>Content will be added here...</em>
+            <div>
+              <ol style={{ margin: "0", paddingLeft: "1.2rem" }}>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Release Definition</strong>: users define a release plan with…
+                  <ul style={{ marginTop: "0.25rem" }}>
+                    <li>
+                      <a
+                        href="https://sre.google/sre-book/service-level-objectives/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Service Level Objectives
+                      </a>{" "}
+                      (SLOs) based on Service Level Indicators (SLIs) sourced from Workers Observability
+                    </li>
+                    <li>
+                      Customizable stages that define…
+                      <ul>
+                        <li>% rollout</li>
+                        <li>Soak time</li>
+                        <li>Whether the stage progresses manually or automatically</li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Version Creation</strong>: To initiate a production release, users create a new Worker version. By default, this has 0% traffic routed to it.
+                </li>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Release Start</strong>: Users then start a release, which is an instance of the release plan. Each stage in the plan progressively increases the percentage of traffic directed from the current Worker version to the new one. For example, a release might consist of stages at 0%, 25%, 50%, 75%, and 100% rollout.
+                </li>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Staged Rollout with Soak Periods</strong>: Within each stage, a soak period begins. During this time, the system continuously monitors SLOs.
+                </li>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Progression and Failing</strong>:
+                  <ul style={{ marginTop: "0.25rem" }}>
+                    <li>If the soak period completes without any SLO violations, the stage can either be manually or automatically progressed to the next stage, increasing the traffic to the new Worker version.</li>
+                    <li>Crucially, if an SLO is violated at any point, the rollout automatically aborts. The deployment is immediately reverted to 100% of the old Worker version, and the new version receives 0% of the traffic.</li>
+                  </ul>
+                </li>
+                <li style={{ marginBottom: "0.5rem" }}>
+                  <strong>Completion</strong>: If all stages successfully pass without SLO violations, the new Worker version reached 100% deployment, meaning all production traffic is now routed to it. At this point, the release is considered complete.
+                </li>
+              </ol>
+            </div>
           </div>
-          <ul style={{ margin: "0", paddingLeft: "1.2rem" }}>
-            <li>Step-by-step deployment guides</li>
-            <li>Configuration examples</li>
-            <li>Troubleshooting tips</li>
-            <li>Best practices</li>
-          </ul>
         </div>
       )}
     </div>

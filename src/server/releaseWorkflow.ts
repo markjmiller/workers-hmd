@@ -348,25 +348,28 @@ Account ID: ${this.accountId}
       i < Math.floor(stagePlan.soak_time / intervalTimeSeconds);
       i++
     ) {
-      // Check if release was stopped
-      const releaseHistory = this.getReleaseHistory();
-      const release = await releaseHistory.getRelease(releaseId);
-      if (release?.state !== "running") {
-        await this.handleExternalCancellation(
-          step,
-          release?.id || "",
-          stageRef.order,
+      // Check for cancellation every 1 second within this interval
+      for (let j = 0; j < intervalTimeSeconds; j++) {
+        // Check if release was stopped
+        const releaseHistory = this.getReleaseHistory();
+        const release = await releaseHistory.getRelease(releaseId);
+        if (release?.state !== "running") {
+          await this.handleExternalCancellation(
+            step,
+            release?.id || "",
+            stageRef.order,
+          );
+          return "exit";
+        }
+        await step.sleep(
+          `${stageRef.id} - check cancellation`,
+          "1 seconds",
         );
-        return "exit";
       }
-      await step.sleep(
-        `${stageRef.id} - soak`,
-        `${intervalTimeSeconds} seconds`,
-      );
       console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
       const wallTimes = await this.getWallTimes(
         workerName,
-        Date.now() - intervalTimeSeconds * 1000000,
+        Date.now() - intervalTimeSeconds * 1000,
         Date.now(),
       );
       // Set observation window to 1 hour for testing
