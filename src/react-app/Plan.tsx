@@ -71,6 +71,7 @@ const PlanEditor: React.FC<PlanEditorProps> = ({ plan, onSave, saveSuccess }) =>
       stages: sortedStages,
       slos: currentPlan.slos,
       worker_name: currentPlan.worker_name,
+      polling_fraction: currentPlan.polling_fraction,
     };
     
     onSave(validatedPlan);

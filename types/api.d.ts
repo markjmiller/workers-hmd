@@ -225,7 +225,7 @@ export interface components {
          *       "stages": {
          *         "type": "array",
          *         "items": {
-         *           "$ref": "#/components/schemas/StageId"
+         *           "$ref": "#/components/schemas/StageRef"
          *         }
          *       },
          *       "time_started": {
@@ -247,7 +247,7 @@ export interface components {
             plan_record: components["schemas"]["Plan"];
             old_version: string;
             new_version: string;
-            stages: components["schemas"]["StageId"][];
+            stages: components["schemas"]["StageRef"][];
             /** Format: date-time */
             time_created: string;
             /** Format: date-time */
@@ -256,7 +256,7 @@ export interface components {
             /** Format: date-time */
             time_done: string;
         };
-        StageId: {
+        StageRef: {
             id: string;
             order: number;
         };
@@ -276,15 +276,30 @@ export interface components {
         Plan: {
             stages: components["schemas"]["PlanStage"][];
             slos: components["schemas"]["SLO"][];
+            /**
+             * @description Fraction of soak time to use for SLO polling rate (0.1 = 1/10, 1.0 = full time)
+             * @example 0.5
+             */
+            polling_fraction: number;
             /** Format: date-time */
             readonly time_last_saved?: string;
             worker_name: string;
         };
-        /** @example {
-         *       "value": "latency p99 100"
-         *     } */
+        /**
+         * @description Service Level Objective configuration
+         * @example {
+         *       "percentile": "p99",
+         *       "latency_ms": 100
+         *     }
+         */
         SLO: {
-            value: string;
+            /**
+             * @description Latency percentile to monitor
+             * @enum {string}
+             */
+            percentile: "p999" | "p99" | "p90" | "median";
+            /** @description Maximum allowed latency in milliseconds */
+            latency_ms: number;
         };
         /** @description Cloudflare Worker version information */
         WorkerVersion: {

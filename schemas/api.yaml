@@ -579,7 +579,7 @@ components:
         stages:
           type: array
           items:
-            $ref: "#/components/schemas/StageId"
+            $ref: "#/components/schemas/StageRef"
         time_started:
           type: string
           format: date-time
@@ -620,7 +620,7 @@ components:
         stages:
           type: array
           items:
-            $ref: "#/components/schemas/StageId"
+            $ref: "#/components/schemas/StageRef"
         time_created:
           type: string
           format: date-time
@@ -632,7 +632,7 @@ components:
         time_done:
           type: string
           format: date-time
-    StageId:
+    StageRef:
       type: object
       readOnly: true
       required:
@@ -655,6 +655,7 @@ components:
         - stages
         - slos
         - worker_name
+        - polling_fraction
       properties:
         stages:
           type: array
@@ -664,6 +665,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SLO"
+        polling_fraction:
+          type: number
+          minimum: 0.1
+          maximum: 1.0
+          description: Fraction of soak time to use for SLO polling rate (0.1 = 1/10, 1.0 = full time)
+          example: 0.5
         time_last_saved:
           type: string
           format: date-time
@@ -672,13 +679,23 @@ components:
           type: string
     SLO:
       type: object
+      description: Service Level Objective configuration
       example:
-        value: "latency p99 100"
+        percentile: "p99"
+        latency_ms: 100
       required:
-        - value
+        - percentile
+        - latency_ms
       properties:
-        value:
+        percentile:
           type: string
+          enum: ["p999", "p99", "p90", "median"]
+          description: Latency percentile to monitor
+        latency_ms:
+          type: integer
+          minimum: 1
+          maximum: 60000
+          description: Maximum allowed latency in milliseconds
     WorkerVersion:
       type: object
       description: Cloudflare Worker version information

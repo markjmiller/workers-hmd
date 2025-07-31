@@ -8,7 +8,8 @@ export interface PlanStage {
 }
 
 export interface SLO {
-  value: string;
+  percentile: 'p999' | 'p99' | 'p90' | 'median';
+  latency_ms: number;
 }
 
 export interface Plan {

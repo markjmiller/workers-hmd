@@ -3,9 +3,10 @@ import { Cloudflare as cf } from 'cloudflare';
 import { components } from '../../types/api';
 import { ReleaseHistory } from './releaseHistory';
 import { StageStorage } from './stage';
+import { SLOEvaluator } from './sloEvaluator';
 import { v4 as uuidv4 } from 'uuid';
 
-type StageId = components["schemas"]["StageId"];
+type StageRef = components["schemas"]["StageRef"];
 type PlanStage = components["schemas"]["PlanStage"];
 type Release = components["schemas"]["Release"];
 
@@ -24,13 +25,13 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<Cloudflare.Env, ReleaseW
     return this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(`release-${releaseId}-order-${stageOrder}`));
   }
 
-  private async updateStagesState(releaseId: string, stages: any[], state: "done_cancelled" | "done_failed", excludeCompleted = true) {
+  private async updateStagesStateBad(releaseId: string, stages: any[], state: "done_cancelled" | "done_failed" | "error", excludeCompleted = true) {
     for (const planStage of stages) {
-      const stageStorage = this.getStageStorage(releaseId, planStage.order);
-      const currentStageData = await stageStorage.get();
+      const stage = this.getStageStorage(releaseId, planStage.order);
+      const currentStageData = await stage.get();
       
       if (currentStageData && (!excludeCompleted || !currentStageData.state.startsWith('done_'))) {
-        await stageStorage.updateStageState(state);
+        await stage.updateStageState(state);
         console.log(`🚫 Set stage ${planStage.order} to ${state}`);
       }
     }
@@ -100,8 +101,8 @@ Account ID: ${this.accountId}
         const currentRelease = await releaseHistory.getRelease(releaseId);
         
         if (currentRelease) {
-          await this.updateStagesState(releaseId, currentRelease.plan_record.stages, "done_failed", true);
-          await releaseHistory.updateReleaseState(releaseId, "done_failed_slo");
+          await this.updateStagesStateBad(releaseId, currentRelease.plan_record.stages, "done_cancelled", true);
+          await releaseHistory.updateReleaseState(releaseId, "error");
         }
         
         if (release) {
@@ -119,37 +120,37 @@ Account ID: ${this.accountId}
     const updateRemainingStages = async (failureState: "done_cancelled" | "done_failed", currentStageOrder: number) => {
       const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order > currentStageOrder);
       console.log(`🔍 Found ${remainingStages.length} remaining stages to update after stage ${currentStageOrder}`);
-      await this.updateStagesState(releaseId, remainingStages, failureState);
+      await this.updateStagesStateBad(releaseId, remainingStages, failureState);
     };
 
-    for (const stage of release.stages) {
-      const stagePlan = release.plan_record.stages.find((s: PlanStage) => s.order === stage.order);
+    for (const stageRef of release.stages) {
+      const stagePlan = release.plan_record.stages.find((s: PlanStage) => s.order === stageRef.order);
       if (!stagePlan) {
-        console.error(`❌ No plan found for stage ${stage.id}`);
+        console.error(`❌ No plan found for stage ${stageRef.id}`);
         continue;
       }
       
-      console.log(`🎬 Starting stage ${stage.order}: ${stagePlan.soak_time}s soak`);
-      const stageStorage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(stage.id));
+      console.log(`🎬 Starting stage ${stageRef.order}: ${stagePlan.soak_time}s soak`);
+      const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(stageRef.id));
 
-      await step.do(`${stage.id} - start`, async () => {
-        await stageStorage.updateStageState("running");
+      await step.do(`${stageRef.id} - start`, async () => {
+        await stage.updateStageState("running");
         await this.setDeploymentTarget(releaseId, release.plan_record.worker_name, stagePlan.target_percent, release.old_version, release.new_version);
       });
 
-      const soakResult = await this.processStageSoak(releaseId, release.plan_record.worker_name, step, stage, stagePlan);
+      const soakResult = await this.processStageSoak(releaseId, release.plan_record.worker_name, step, stageRef, stagePlan);
       if (soakResult === 'exit') {
-        console.log(`🛑 Stage ${stage.order} soak failed - exiting workflow`);
+        console.log(`🛑 Stage ${stageRef.order} soak failed - exiting workflow`);
         return;
       }
-      console.log(`🛁 Stage ${stage.order} soak completed`);
+      console.log(`🛁 Stage ${stageRef.order} soak completed`);
 
-      const shouldWaitForApproval = await this.handleStageApproval(step, stage, stagePlan, release, stageStorage, updateRemainingStages, releaseHistory, releaseId);
+      const shouldWaitForApproval = await this.handleStageApproval(step, stageRef, stagePlan, release, stage, updateRemainingStages, releaseHistory, releaseId);
       if (shouldWaitForApproval === 'exit') return;
 
-      await step.do(`${stage.id} - done`, async () => {
-        await stageStorage.updateStageState("done_successful");
-        console.log(`✅ Stage ${stage.order} completed`);
+      await step.do(`${stageRef.id} - done`, async () => {
+        await stage.updateStageState("done_successful");
+        console.log(`✅ Stage ${stageRef.order} completed`);
       });
     }
   }
@@ -162,7 +163,7 @@ Account ID: ${this.accountId}
       if (release) {
         // Update all non-completed stages to cancelled state
         const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order >= currentStageOrder);
-        await this.updateStagesState(releaseId, remainingStages, "done_cancelled", true);
+        await this.updateStagesStateBad(releaseId, remainingStages, "done_cancelled", true);
         
         // Update release state to done_stopped_manually
         await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
@@ -182,12 +183,12 @@ Account ID: ${this.accountId}
       
       if (release) {
         // First, explicitly mark the current stage as failed
-        const currentStageStorage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(currentStageId));
-        await currentStageStorage.updateStageState("done_failed");
+        const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(currentStageId));
+        await stage.updateStageState("done_failed");
         
         // Update all remaining stages (after current) to cancelled state  
         const remainingStages = release.plan_record.stages.filter((s: PlanStage) => s.order > currentStageOrder);
-        await this.updateStagesState(releaseId, remainingStages, "done_cancelled", true);
+        await this.updateStagesStateBad(releaseId, remainingStages, "done_cancelled", true);
         
         // Update release state to done_failed_slo
         await releaseHistory.updateReleaseState(releaseId, "done_failed_slo");
@@ -197,19 +198,25 @@ Account ID: ${this.accountId}
     });
   }
 
-  private async processStageSoak(releaseId: string, workerName: string, step: WorkflowStep, stage: StageId, stagePlan: PlanStage): Promise<'continue' | 'exit'> {
-    // TODO for prod this should be 5 mins
-    const intervalTimeSeconds = 10;
+  private async processStageSoak(releaseId: string, workerName: string, step: WorkflowStep, stageRef: StageRef, stagePlan: PlanStage): Promise<'continue' | 'exit'> {
+    // Get release to access plan polling configuration
+    const releaseHistory = this.getReleaseHistory();
+    const release = await releaseHistory.getRelease(releaseId);
+    
+    // Calculate interval time based on plan-level polling_fraction
+    const pollingFraction = release?.plan_record?.polling_fraction || 0.5;
+    const intervalTimeSeconds = Math.max(1, Math.floor(stagePlan.soak_time * pollingFraction));
+    
     for (let i = 0; i < Math.floor(stagePlan.soak_time / intervalTimeSeconds); i++) {
       // Check if release was stopped
       const releaseHistory = this.getReleaseHistory();
       const release = await releaseHistory.getRelease(releaseId);
       if (release?.state !== 'running') {
-        await this.handleExternalCancellation(step, release?.id || '', stage.order);
+        await this.handleExternalCancellation(step, release?.id || '', stageRef.order);
         return 'exit';
       }
-      await step.sleep(`${stage.id} - soak`, `${intervalTimeSeconds} seconds`);
-      console.log(`🛁 Stage ${stage.order} soak - Checking SLOs`);
+      await step.sleep(`${stageRef.id} - soak`, `${intervalTimeSeconds} seconds`);
+      console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
       // TODO for prod this should use:
       //const wallTimes = await this.getWallTimes(workerName, Date.now() - intervalTimeSeconds * 1000000, Date.now());
       const wallTimes = await this.getWallTimes(workerName, Date.now() - 60 * 60 * 1000000, Date.now());
@@ -222,10 +229,27 @@ P50 Wall: ${wallTimes.median}
 =====================
       `);
 
-      if (wallTimes.p999 > 1000) {
-        console.log(`🛑 Stage ${stage.order} soak failed - P999 Wall time exceeded 1000ms`);
-        await this.handleSLOViolation(step, release?.id || '', stage.order, stage.id);
-        return 'exit';
+      // Get SLO configurations from the release plan
+      const sloConfigs = SLOEvaluator.parseSLOsFromPlan(release!.plan_record.slos);
+
+      if (sloConfigs.length > 0) {
+        // Evaluate SLOs using the new evaluator
+        const sloResult = SLOEvaluator.evaluateSLOs(sloConfigs, wallTimes);
+        
+        console.log(`📊 SLO Evaluation: ${sloResult.summary}`);
+        
+        if (!sloResult.passed) {
+          console.log(`🛑 Stage ${stageRef.order} soak failed - SLO violations: ${sloResult.violations.map(v => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(', ')}`);
+          const stage = this.env.STAGE_STORAGE.get(this.env.STAGE_STORAGE.idFromName(stageRef.id));
+          await stage.addLog(`🛑 SLO violations: ${sloResult.violations.map(v => `${v.percentile} ${v.actual_ms}ms > ${v.expected_max_ms}ms`).join(', ')}`);
+          await this.handleSLOViolation(step, release?.id || '', stageRef.order, stageRef.id);
+
+          return 'exit';
+        }
+        
+        console.log(`✅ Stage ${stageRef.order} soak passed - All SLOs satisfied`);
+      } else {
+        console.log(`⚠️  Stage ${stageRef.order} soak - No SLOs configured, skipping SLO check`);
       }
     }
     return 'continue';
@@ -233,55 +257,45 @@ P50 Wall: ${wallTimes.median}
 
   private async handleStageApproval(
     step: WorkflowStep, 
-    stage: StageId, 
+    stageRef: StageRef, 
     stagePlan: PlanStage, 
     release: Release, 
-    stageStorage: DurableObjectStub<StageStorage>, 
+    stage: DurableObjectStub<StageStorage>, 
     updateRemainingStages: (state: "done_cancelled" | "done_failed", order: number) => Promise<void>,
     releaseHistory: DurableObjectStub<ReleaseHistory>,
     releaseId: string
   ): Promise<'continue' | 'exit'> {
-    const isLastStage = stage.order === Math.max(...release.plan_record.stages.map((s: PlanStage) => s.order));
+    const isLastStage = stageRef.order === Math.max(...release.plan_record.stages.map((s: PlanStage) => s.order));
     
     if (!stagePlan.auto_progress && !isLastStage) {
-      await step.do(`${stage.id} - set awaiting approval`, async () => {
-        await stageStorage.updateStageState("awaiting_approval");
+      await step.do(`${stageRef.id} - set awaiting approval`, async () => {
+        await stage.updateStageState("awaiting_approval");
       });
-      console.log(`⏳ Stage ${stage.order} awaiting approval`);
+      console.log(`⏳ Stage ${stageRef.order} awaiting approval`);
 
-      let waitForApproval;
-      while (true) {
-        // Check if release has been stopped
-        const currentRelease = await releaseHistory.getRelease(releaseId);
-        if (!currentRelease || currentRelease.state !== 'running') {
-          console.log(`🛑 Release ${releaseId} was stopped during approval wait`);
-          await this.handleExternalCancellation(step, releaseId, stage.order);
-          return 'exit';
-        }
-        
-        // Wait for approval with timeout
-        waitForApproval = await step.waitForEvent(`Waiting for stage ${stage.id} approval`, {
-          type: `${stage.id}-user-progress-command`,
-          timeout: '5 seconds'
-        });
-        
-        // If we got an event, break out of the loop
-        if (waitForApproval !== null) {
-          break;
-        }
+      // Check if release has been stopped
+      const currentRelease = await releaseHistory.getRelease(releaseId);
+      if (!currentRelease || currentRelease.state !== 'running') {
+        console.log(`🛑 Release ${releaseId} was stopped during approval wait`);
+        await this.handleExternalCancellation(step, releaseId, stageRef.order);
+        return 'exit';
       }
-      
+
+      const waitForApproval = await step.waitForEvent(`Waiting for stage ${stageRef.id} approval`, {
+        type: `${stageRef.id}-user-progress-command`,
+      });
+
       if (waitForApproval.payload === "approve") {
-        console.log(`✔️ Stage ${stage.order} approved`);
+        console.log(`✔️ Stage ${stageRef.order} approved`);
         return 'continue';
       } else if (waitForApproval.payload === "deny") {
-        console.log(`❌ Stage ${stage.order} denied - stopping release`);
+        console.log(`❌ Stage ${stageRef.order} denied - stopping release`);
         
-        await step.do(`Cancel stage ${stage.id} and remaining stages`, async () => {
-          await stageStorage.updateStageState("done_cancelled");
-          await updateRemainingStages("done_cancelled", stage.order);
+        await step.do(`Cancel stage ${stageRef.id} and remaining stages`, async () => {
+          await stage.updateStageState("done_cancelled");
+          await updateRemainingStages("done_cancelled", stageRef.order);
           await releaseHistory.updateReleaseState(releaseId, "done_stopped_manually");
-          console.log(`🛑 Release stopped - stage ${stage.order} denied`);
+          console.log(`🛑 Release stopped - stage ${stageRef.order} denied`);
           // Revert deployment when release is manually cancelled
           await this.revertDeployment(releaseId, release.plan_record.worker_name, release.old_version);
         });

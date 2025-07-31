@@ -810,7 +810,9 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           <div className="slos-list">
             {activeRelease.plan_record.slos.map((slo, index) => (
               <div key={index} className="slo-item">
-                <span className="slo-value">{slo.value}</span>
+                <span className="slo-value">
+                  {slo.percentile} latency &lt; {slo.latency_ms}ms
+                </span>
               </div>
             ))}
           </div>

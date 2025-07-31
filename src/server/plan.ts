@@ -8,7 +8,7 @@ export class PlanStorage extends DurableObject<Env> {
     super(ctx, env);
   }
 
-  async getPlan(): Promise<Plan> {
+  async get(): Promise<Plan> {
     let plan = await this.ctx.storage.get("main") as Plan;
     if (!plan) {
       plan = {
@@ -36,9 +36,13 @@ export class PlanStorage extends DurableObject<Env> {
           },
         ],
         slos: [
-          { value: "latency p999 < 100ms" },
+          {
+            percentile: "p999",
+            latency_ms: 100,
+          },
         ],
         worker_name: "my-worker",
+        polling_fraction: 0.5,
       };
       await this.ctx.storage.put("main", plan);
     }

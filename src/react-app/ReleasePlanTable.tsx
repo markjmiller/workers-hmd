@@ -19,6 +19,7 @@ import {
   restrictToWindowEdges,
 } from '@dnd-kit/modifiers';
 import { SortableStageRow } from './SortableStageRow.tsx';
+import SloForm from './SloForm';
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
@@ -42,6 +43,7 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     initialPlan.stages
   );
   const [slos, setSlos] = useState<SLO[]>(initialPlan.slos);
+  const [pollingFraction, setPollingFraction] = useState<number>(initialPlan.polling_fraction || 0.5);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [sloValidationErrors, setSloValidationErrors] = useState<Record<number, string>>({});
   const [jsonRepresentation, setJsonRepresentation] = useState<string>('');
@@ -91,13 +93,15 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  // Validation function to check SLOs are not empty
+  // Validation function to check SLOs are properly configured
   const validateSLOs = (slosToValidate: SLO[]) => {
     const errors: Record<number, string> = {};
     
     slosToValidate.forEach((slo, index) => {
-      if (!slo.value || slo.value.trim() === '') {
-        errors[index] = 'SLO cannot be empty';
+      if (!slo.percentile || !slo.latency_ms) {
+        errors[index] = 'SLO configuration is incomplete';
+      } else if (slo.latency_ms <= 0 || slo.latency_ms > 60000) {
+        errors[index] = 'Latency must be between 1ms and 60000ms';
       }
     });
     
@@ -212,7 +216,10 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
 
   // SLO management functions
   const addSlo = () => {
-    const newSlo: SLO = { value: '' };
+    const newSlo: SLO = {
+      percentile: 'p99',
+      latency_ms: 100
+    };
     const updatedSlos = [...slos, newSlo];
     setSlos(updatedSlos);
     
@@ -231,9 +238,9 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     setTimeout(() => validateSLOs(updatedSlos), 0);
   };
 
-  const updateSlo = (index: number, value: string) => {
+  const updateSlo = (index: number, newSloData: SLO) => {
     const updatedSlos = slos.map((slo, i) => 
-      i === index ? { ...slo, value } : slo
+      i === index ? newSloData : slo
     );
     setSlos(updatedSlos);
     
@@ -253,8 +260,9 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
       stages: [...stages].sort((a, b) => a.order - b.order),
       slos,
       worker_name: initialPlan.worker_name,
+      polling_fraction: pollingFraction,
     };
-  }, [stages, slos]);
+  }, [stages, slos, pollingFraction]);
 
   // Check if there are any validation errors
   const hasValidationErrors = React.useCallback(() => {
@@ -285,19 +293,50 @@ export const ReleasePlanTable: React.FC<ReleasePlanTableProps> = ({
     <div>
       {!showJsonView ? (
         <div className="release-plan-form">
+          <div className="polling-rate-container" style= {{marginBottom: '1rem'}}>
+            <label htmlFor="polling-rate" className="polling-rate-label">
+              Polling rate:
+            </label>
+            <input
+              id="polling-rate"
+              type="number"
+              min="0.1"
+              max="1.0"
+              step="0.1"
+              value={pollingFraction}
+              onChange={(e) => setPollingFraction(Math.max(0.1, Math.min(1.0, parseFloat(e.target.value) || 0.1)))}
+              className="polling-rate-input"
+              placeholder="0.5"
+              style={{marginLeft: '0.5em'}}
+            />
+            <br />
+            <small className="polling-rate-help">
+              0.1 (every 10% of soak time) to 1.0 (full soak time)
+            </small>
+          </div>
         <div className="slos-section">
           <h3 className="section-heading">SLOs</h3>
+          <div className="slo-notice">
+            <span className="slo-notice-icon">ℹ️</span>
+            Currently only <strong>latency SLOs</strong> are supported. Future versions will support availability SLOs and other performance metrics.
+          </div>
           <div className="slo-entry-container">
           {slos.map((slo, index) => (
             <div key={index} className="slo-entry">
               <div className="slo-input-container">
-                <div className="slo-textarea-container">
-                  <textarea
-                    value={slo.value}
-                    onChange={(e) => updateSlo(index, e.target.value)}
-                    placeholder="latency p999 < 100ms, 5xx error rate < 0.1%, etc..."
-                    className={`slo-textarea ${sloValidationErrors[index] ? 'error' : ''}`}
-                    rows={3}
+                <div className="slo-form-container" style={ { flexGrow: 1 } }>
+                  <SloForm
+                    value={slo}
+                    onChange={(newSloData) => updateSlo(index, newSloData)}
+                    onValidationError={(error) => {
+                      const newErrors = { ...sloValidationErrors };
+                      if (error) {
+                        newErrors[index] = error;
+                      } else {
+                        delete newErrors[index];
+                      }
+                      setSloValidationErrors(newErrors);
+                    }}
                   />
                   {sloValidationErrors[index] && (
                     <div className="validation-error">
