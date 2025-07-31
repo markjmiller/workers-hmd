@@ -10,7 +10,6 @@
     "preview": "npm run build && vite preview",
     "build": "tsc -b && vite build && npm run render-api-docs",
     "lint": "prettier ./src --write",
-    "test": "node test/test_endpoint.js",
     "lint-openapi": "npx @redocly/cli lint ./schemas/api.yaml",
     "preview-openapi": "npx @redocly/cli preview-docs -p 8888 ./schemas/api.yaml",
     "render-api-docs": "node_modules/.bin/api2html -o ./dist/api.html -l shell,javascript--nodejs ./schemas/api.yaml"

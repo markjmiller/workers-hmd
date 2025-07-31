@@ -304,7 +304,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
                         <div className="slos-grid">
                           {release.plan_record.slos.map((slo, index) => (
                             <div key={index} className="slo-item">
-                              {slo.value}
+                              {slo.percentile} latency &lt; {slo.latency_ms}ms
                             </div>
                           ))}
                         </div>

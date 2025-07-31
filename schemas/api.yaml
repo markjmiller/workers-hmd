@@ -175,8 +175,14 @@ paths:
               schema:
                 oneOf:
                   - $ref: "#/components/schemas/Release"
-                  - type: "null"
+                  - type: "object"
                 description: Active release object if one exists, null otherwise
+        400:
+          description: Something is wrong with the active release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Control active release execution
       description: Start or stop the active release

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import './common.css';
+import { WorkerInfo } from './WorkerInfo';
 
 interface ConnectProps {
   onConnectionChange: (isConnected: boolean) => void;
@@ -130,24 +132,13 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
             
             {/* Worker Details */}
             <div className="status-details">
-              <div className="status-detail-item">
-                <i className="fas fa-cog icon-secondary"></i>
-                <span className="status-detail-text">
-                  <strong>Worker:</strong> 
-                  <span className="status-detail-value status-detail-value-primary text-mono">
-                    {formData.workerName}
-                  </span>
-                </span>
-                <a 
-                  href={`https://dash.cloudflare.com/${formData.accountId}/workers/services/view/${formData.workerName}/production/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: '#666', textDecoration: 'none' }}
-                  title="Open in Cloudflare Dashboard"
-                >
-                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
-                </a>
-              </div>
+              <WorkerInfo 
+                workerName={formData.workerName}
+                accountId={formData.accountId}
+                linkPath="production"
+                className="status-detail-item"
+                style={{}}
+              />
               
               <div className="status-detail-item">
                 <i className="fas fa-id-card icon-secondary"></i>

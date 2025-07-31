@@ -217,9 +217,9 @@ Account ID: ${this.accountId}
       }
       await step.sleep(`${stageRef.id} - soak`, `${intervalTimeSeconds} seconds`);
       console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
-      // TODO for prod this should use:
-      //const wallTimes = await this.getWallTimes(workerName, Date.now() - intervalTimeSeconds * 1000000, Date.now());
-      const wallTimes = await this.getWallTimes(workerName, Date.now() - 60 * 60 * 1000000, Date.now());
+      const wallTimes = await this.getWallTimes(workerName, Date.now() - intervalTimeSeconds * 1000000, Date.now());
+      // Set observation window to 1 hour for testing
+      // const wallTimes = await this.getWallTimes(workerName, Date.now() - 60 * 60 * 1000000, Date.now());
       console.log(`
 === Observability ===
 P999 Wall: ${wallTimes.p999}

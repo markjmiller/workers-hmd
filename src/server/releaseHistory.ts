@@ -172,19 +172,6 @@ export class ReleaseHistory extends DurableObject<Env> {
     return release;
   }
 
-  // async getCompletedReleases(): Promise<Release[]> {
-  //   const history = await this.getReleaseHistory();
-  //   return history.releases.filter(release => 
-  //     release.state === "done_successful" ||
-  //     release.state === "stopped_failed_slo"
-  //   );
-  // }
-
-  // async getRecentReleases(limit: number = 10): Promise<Release[]> {
-  //   const history = await this.getReleaseHistory();
-  //   return history.releases.slice(0, limit);
-  // }
-
   async removeRelease(id: string): Promise<boolean> {
     const history = await this.getReleaseHistory();
     const initialLength = history.releases.length;

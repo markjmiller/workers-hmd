@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { components } from '../../types/api';
 import { StageItem } from './StageItem';
+import { WorkerInfo } from './WorkerInfo';
 import { formatReleaseState, api, isReleaseComplete, getShortVersionId } from './utils';
 import './Release.css';
 
@@ -518,28 +519,16 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           <p>Create a release from your current plan to begin deployment.</p>
           
           {workerInfo && (
-            <div className="card-info">
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                <i className="fas fa-cog icon-secondary"></i>
-                <span style={{ fontSize: '0.95rem', color: '#495057' }}>
-                  <strong>Worker:</strong> 
-                  <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
-                    {workerInfo.name}
-                  </span>
-                </span>
-                <a 
-                  href={`https://dash.cloudflare.com/${workerInfo.accountId}/workers/services/view/${workerInfo.name}/production/deployments`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: '#666', textDecoration: 'none' }}
-                  title="Open in Cloudflare Dashboard"
-                >
-                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
-                </a>
-              </div>
+            <>
+              <WorkerInfo 
+                workerName={workerInfo.name}
+                accountId={workerInfo.accountId}
+                linkPath="deployments"
+                className="card-info"
+                style={{}}
+              />
               
               {/* Worker Connection Status */}
-
               {versionsLoading ? (
                 <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e0e0e0', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -568,7 +557,7 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
                   </button>
                 </div>
               ) : null}
-            </div>
+            </>
           )}
           
           {/* Deployment Status */}
@@ -704,13 +693,6 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1em', fontSize: '0.9em', color: '#666', backgroundColor: '#f8f9fa', padding: '0.75em', borderRadius: '4px', }}>
             {workerInfo && (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                <i className="fas fa-cog icon-secondary"></i>
-                <span style={{ fontSize: '0.95rem', color: '#495057' }}>
-                  <strong>Worker:</strong> 
-                  <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
-                    {workerInfo.name}
-                  </span>
-                </span>
                 <a 
                   href={`https://dash.cloudflare.com/${workerInfo.accountId}/workers/services/view/${workerInfo.name}/production/deployments`}
                   target="_blank"
@@ -718,7 +700,12 @@ export const Release: React.FC<ReleaseProps> = ({ onError, onReleaseStateChange,
                   style={{ color: '#666', textDecoration: 'none' }}
                   title="Open in Cloudflare Dashboard"
                 >
-                  <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+                  <span style={{ fontSize: '0.95rem', color: '#495057' }}>
+                    <strong>Worker:</strong> 
+                    <span className="text-mono" style={{ marginLeft: '0.5rem', color: '#007bff' }}>
+                      {workerInfo.name} <i className="fas fa-external-link-alt" style={{ fontSize: '0.8rem' }}></i>
+                    </span>
+                  </span>
                 </a>
               </div>
             )}
