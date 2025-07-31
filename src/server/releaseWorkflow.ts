@@ -361,10 +361,7 @@ Account ID: ${this.accountId}
           );
           return "exit";
         }
-        await step.sleep(
-          `${stageRef.id} - check cancellation`,
-          "1 seconds",
-        );
+        await step.sleep(`${stageRef.id} - check cancellation`, "1 seconds");
       }
       console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
       const wallTimes = await this.getWallTimes(

@@ -23,12 +23,16 @@ function getStageId(releaseId: string, stageOrder: string | number): string {
   return `release-${releaseId}-order-${stageOrder}`;
 }
 
+// TODO: this should take in account id and worker name to use for the DO id
+// This will make sure each plan and release history is unique to the worker connection
 async function getReleaseHistory(c: any): Promise<ReleaseHistory> {
   return await c.env.RELEASE_HISTORY.get(
     c.env.RELEASE_HISTORY.idFromName("main"),
   );
 }
 
+// TODO: this should take in account id and worker name to use for the DO id
+// This will make sure each plan and release history is unique to the worker connection
 async function getPlan(c: any): Promise<PlanStorage> {
   return await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main"));
 }

@@ -67,6 +67,14 @@ Then click create release! You'll get live updates of your release progress:
 
 ![release-progress](./public/release-progress.png)
 
+You can approve or deny stages that aren't set to "Auto Progress":
+
+![approve-stage](./public/approve-stage.png)
+
+In the Cloudflare dashboard you can see your deployments being actioned:
+
+![cloudflare-dash-deployment](./public/cloudflare-dash-deployment.png)
+
 ### 4. See history and why releases failed
 
 ![historical-fail](./public/historical-fail.png)
@@ -97,6 +105,59 @@ Or a successful deployment!
 | `npm run cf-typegen` | **Generate Worker types** - Run when new Cloudflare bindings are added |
 | `npm run lint-openapi` | **Validate OpenAPI schema** - Check API documentation for errors |
 | `npm run preview-openapi` | **Preview API docs** - View OpenAPI documentation in browser |
+
+### Debugging
+
+Useful logs for seeing exactly what's happening. Just call `npx wrangler tail`!
+
+```
+🚀 Starting release: dff05d56
+----------
+Worker Name: simulated-service
+Account ID: c855e2dd8145bf97126b4cdd08464a5a
+----------
+
+🎬 Starting stage 1: 600s soak
+
+=== CF DEPLOYMENT API REQUEST ===
+Account: c855e2dd8145bf97126b4cdd08464a5a
+Worker: simulated-service
+Old Version: e591e866-cd70-4d35-b5b3-c652bb7259e3 (90%)
+New Version: 14715573-1e39-4a3d-b7cf-f778a1a4fcca (10%)
+================================
+
+🛁 Stage 1 soak - Checking SLOs
+
+=== Observability ===
+P999 Wall: 893
+P99 Wall: 251
+P90 Wall: 65
+P50 Wall: 43
+=====================
+
+📊 SLO Evaluation: All 2 SLO(s) passed
+
+✅ Stage 1 soak passed - All SLOs satisfied
+
+🛁 Stage 1 soak - Checking SLOs
+
+=== Observability ===
+P999 Wall: 899
+P99 Wall: 231
+P90 Wall: 68
+P50 Wall: 42
+=====================      
+
+📊 SLO Evaluation: All 2 SLO(s) passed
+
+✅ Stage 1 soak passed - All SLOs satisfied
+
+🛁 Stage 1 soak completed
+
+✅ Stage 1 completed
+
+🎬 Starting stage 2: 600s soak
+```
 
 ## Simulation
 
