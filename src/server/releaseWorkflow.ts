@@ -101,7 +101,6 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<
     this.connectionId = connectionId;
     this.accountId = accountId;
     this.workerName = workerName;
-    console.log("workflow", accountId, workerName, connectionId);
     const releaseHistory = getReleaseHistory(
       this.env,
       connectionId,

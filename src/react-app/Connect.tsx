@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./common.css";
 import { WorkerInfo } from "./WorkerInfo";
+import { hashApiToken } from "./utils";
 
 interface ConnectProps {
   onConnectionChange: (isConnected: boolean) => void;
@@ -75,7 +76,6 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
         const data = await response.json();
         if (data.success && data.result) {
           // Connection successful - store in session storage with hashed token for security
-          const { hashApiToken } = await import("./utils");
           const hashedToken = await hashApiToken(formData.apiToken);
 
           const connectionData = {
