@@ -11,17 +11,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get deployment plan
-         * @description Retrieve the current deployment plan with stages and SLOs
-         */
-        get: operations["getPlan"];
-        put?: never;
+        get?: never;
         /**
          * Update deployment plan
          * @description Create or update the deployment plan configuration
          */
-        post: operations["updatePlan"];
+        put: operations["updatePlan"];
+        /**
+         * Get deployment plan
+         * @description Retrieve the current deployment plan with stages and SLOs
+         */
+        post: operations["getPlan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -35,17 +35,53 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * List releases
          * @description Get a list of all releases including current and completed ones
          */
-        get: operations["listReleases"];
+        post: operations["listReleases"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/release/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         /**
          * Create release
          * @description Create a new release. Only one release can be staged at a time
          */
         post: operations["createRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/release/active/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get active release
+         * @description Retrieve the active release, or null if no active release exists
+         */
+        post: operations["getActiveRelease"];
         delete?: never;
         options?: never;
         head?: never;
@@ -59,11 +95,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get active release
-         * @description Retrieve the active release, or null if no active release exists
-         */
-        get: operations["getActiveRelease"];
+        get?: never;
         put?: never;
         /**
          * Control active release execution
@@ -87,13 +119,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Get release details
          * @description Retrieve release state, plan record, and stage information
          */
-        get: operations["getRelease"];
-        put?: never;
-        post?: never;
+        post: operations["getRelease"];
         delete?: never;
         options?: never;
         head?: never;
@@ -168,6 +200,32 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Cloudflare account and worker connection details required for API authentication */
+        CloudflareConnection: {
+            /**
+             * @description Cloudflare account ID
+             * @example f855e2dd8145bf97126b4cdd08464a5e
+             */
+            accountId: string;
+            /**
+             * @description Cloudflare Worker name
+             * @example my-worker
+             */
+            workerName: string;
+            /**
+             * @description Cloudflare API token for authentication
+             * @example vG9vYJ1_cPOzA1JyjDWdaL5X26bFUKNfnmXLA200
+             */
+            apiToken: string;
+        };
+        /** @description Connection Id unique per Worker connection */
+        ConnectionIdRequest: {
+            /**
+             * @description Combined connection identifier in format accountId-workerName-hashedApiToken
+             * @example f855e2dd8145bf97126b4cdd08464a5e-my-worker-a1b2c3d4
+             */
+            connectionId: string;
+        };
         /** @example {
          *       "order": 0,
          *       "description": "",
@@ -405,33 +463,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Plan retrieved successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Plan"];
-                };
-            };
-            /** @description Plan not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     updatePlan: {
         parameters: {
             query?: never;
@@ -441,7 +472,10 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Plan"];
+                "application/json": {
+                    connection: components["schemas"]["CloudflareConnection"];
+                    plan: components["schemas"]["Plan"];
+                };
             };
         };
         responses: {
@@ -474,25 +508,87 @@ export interface operations {
             };
         };
     };
-    listReleases: {
+    getPlan: {
         parameters: {
-            query?: {
-                /** @description Maximum number of releases to return (default 50, max 100) */
-                limit?: number;
-                /** @description Number of releases to skip for pagination (default 0) */
-                offset?: number;
-                /** @description Filter releases created after this timestamp (ISO 8601 format) */
-                since?: string;
-                /** @description Filter releases created before this timestamp (ISO 8601 format) */
-                until?: string;
-                /** @description Filter releases by state */
-                state?: "not_started" | "running" | "done_successful" | "done_stopped_manually" | "done_failed_slo";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudflareConnection"];
+            };
+        };
+        responses: {
+            /** @description Plan retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            /** @description Invalid connection details */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    connection: components["schemas"]["CloudflareConnection"];
+                    /**
+                     * @description Maximum number of releases to return (default 50, max 100)
+                     * @default 50
+                     */
+                    limit?: number;
+                    /**
+                     * @description Number of releases to skip for pagination (default 0)
+                     * @default 0
+                     */
+                    offset?: number;
+                    /**
+                     * Format: date-time
+                     * @description Filter releases created after this timestamp (ISO 8601 format)
+                     * @example 2024-01-01T00:00:00Z
+                     */
+                    since?: string;
+                    /**
+                     * Format: date-time
+                     * @description Filter releases created before this timestamp (ISO 8601 format)
+                     * @example 2024-12-31T23:59:59Z
+                     */
+                    until?: string;
+                    /**
+                     * @description Filter releases by state
+                     * @enum {string}
+                     */
+                    state?: "not_started" | "running" | "done_successful" | "done_stopped_manually" | "done_failed_slo";
+                };
+            };
+        };
         responses: {
             /** @description List of releases retrieved successfully */
             200: {
@@ -530,7 +626,18 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Connection identifier */
+                    connectionId: string;
+                    /** @description Old version ID */
+                    old_version?: string;
+                    /** @description New version ID */
+                    new_version?: string;
+                };
+            };
+        };
         responses: {
             /** @description Release created successfully */
             200: {
@@ -575,7 +682,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudflareConnection"];
+            };
+        };
         responses: {
             /** @description Success (returns active release or null) */
             200: {
@@ -584,6 +695,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Release"] | null;
+                };
+            };
+            /** @description Invalid connection details or something is wrong with the active release */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -703,7 +823,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudflareConnection"];
+            };
+        };
         responses: {
             /** @description Release details retrieved successfully */
             200: {
@@ -712,6 +836,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description Invalid connection details */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Release not found */

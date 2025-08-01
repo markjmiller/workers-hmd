@@ -7,8 +7,9 @@ import {
   api,
   isReleaseComplete,
   getShortVersionId,
-  getConnectionIdentifier,
 } from "./utils";
+import { useWorkerConnection } from "./hooks/useWorkerConnection";
+import { EmptyState } from "./components/EmptyState";
 import "./Release.css";
 
 type Release = components["schemas"]["Release"];
@@ -33,10 +34,6 @@ export const Release: React.FC<ReleaseProps> = ({
   const [deleting, setDeleting] = useState<boolean>(false);
   const [starting, setStarting] = useState<boolean>(false);
   const [stopping, setStopping] = useState<boolean>(false);
-  const [workerInfo, setWorkerInfo] = useState<{
-    name: string;
-    accountId: string;
-  } | null>(null);
   const [workerVersions, setWorkerVersions] = useState<any[]>([]);
   const [versionsLoading, setVersionsLoading] = useState<boolean>(false);
   const [versionsError, setVersionsError] = useState<string | null>(null);
@@ -45,6 +42,9 @@ export const Release: React.FC<ReleaseProps> = ({
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [selectedOldVersion, setSelectedOldVersion] = useState<string>("");
   const [selectedNewVersion, setSelectedNewVersion] = useState<string>("");
+
+  // Use shared connection hook
+  const { workerInfo, isConnected, connectionId } = useWorkerConnection();
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -55,13 +55,11 @@ export const Release: React.FC<ReleaseProps> = ({
   useEffect(() => {
     const initializeRelease = async () => {
       // Check if worker connection exists before making API calls
-      const connectionId = getConnectionIdentifier();
-      if (!connectionId) {
+      if (!isConnected || !connectionId) {
         // No connection exists - reset to default state and don't make API calls
         setLoading(false);
         setActiveRelease(null);
         setReleaseStages([]);
-        setWorkerInfo(null);
         setWorkerVersions([]);
         setConnectionVerified(false);
         return;
@@ -72,26 +70,15 @@ export const Release: React.FC<ReleaseProps> = ({
       // If there's an active release after checking, ensure polling is running
       // This helps with cases where the component remounts after tab switching
 
-      // Load worker info from session storage using secure connection data
-      const savedConnection = sessionStorage.getItem("workerConnection");
-      if (savedConnection) {
-        try {
-          const connection = JSON.parse(savedConnection);
-          setWorkerInfo({
-            name: connection.workerName,
-            accountId: connection.accountId,
-          });
-          // Fetch worker versions and deployment info after setting worker info
-          fetchWorkerVersions(connection.workerName, connection.accountId);
-          fetchActiveDeployment(connection.workerName, connection.accountId);
-        } catch (error) {
-          console.error("Error parsing worker connection:", error);
-        }
+      // Fetch worker versions and deployment info using worker info from hook
+      if (workerInfo) {
+        fetchWorkerVersions(workerInfo.name, workerInfo.accountId);
+        fetchActiveDeployment(workerInfo.name, workerInfo.accountId);
       }
     };
 
     initializeRelease();
-  }, []);
+  }, [isConnected, connectionId]);
 
   // Keep activeReleaseRef in sync with activeRelease state
   useEffect(() => {
@@ -560,6 +547,17 @@ export const Release: React.FC<ReleaseProps> = ({
       setStopping(false);
     }
   };
+
+  // Show empty state when no connection
+  if (!isConnected) {
+    return (
+      <EmptyState
+        title="No Worker Connection"
+        description="Connect to a Cloudflare Worker to view and manage releases."
+        icon="🚀"
+      />
+    );
+  }
 
   if (loading) {
     return (

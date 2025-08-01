@@ -148,12 +148,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /release/create:
     post:
       summary: Create release
       description: Create a new release. Only one release can be staged at a time
       operationId: createRelease
       tags:
         - Release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - connectionId
+              properties:
+                connectionId:
+                  type: string
+                  description: Connection identifier
+                old_version:
+                  type: string
+                  description: Old version ID
+                new_version:
+                  type: string
+                  description: New version ID
       responses:
         200:
           description: Release created successfully
@@ -175,7 +194,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-  /release/active:
+  /release/active/get:
     post:
       summary: Get active release
       description: Retrieve the active release, or null if no active release exists
@@ -196,14 +215,14 @@ paths:
               schema:
                 oneOf:
                   - $ref: "#/components/schemas/Release"
-                  - type: "object"
-                description: Active release object if one exists, null otherwise
+                  - type: "null"
         400:
           description: Invalid connection details or something is wrong with the active release
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /release/active:
     post:
       summary: Control active release execution
       description: Start or stop the active release
@@ -545,6 +564,16 @@ components:
           type: string
           description: Cloudflare API token for authentication
           example: "vG9vYJ1_cPOzA1JyjDWdaL5X26bFUKNfnmXLA200"
+    ConnectionIdRequest:
+      type: object
+      description: Connection Id unique per Worker connection
+      required:
+        - connectionId
+      properties:
+        connectionId:
+          type: string
+          description: Combined connection identifier in format accountId-workerName-hashedApiToken
+          example: "f855e2dd8145bf97126b4cdd08464a5e-my-worker-a1b2c3d4"
     PlanStage:
       type: object
       example:

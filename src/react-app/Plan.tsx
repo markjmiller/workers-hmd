@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { ReleasePlanTable } from "./ReleasePlanTable";
 import { WorkerInfo } from "./WorkerInfo";
-import { api, getConnectionIdentifier } from "./utils";
+import { api } from "./utils";
+import { useWorkerConnection } from "./hooks/useWorkerConnection";
+import { EmptyState } from "./components/EmptyState";
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
@@ -169,102 +171,56 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // Track current connection identifier to detect changes (uses hashed token for security)
-  const [currentConnectionId, setCurrentConnectionId] = useState<string | null>(null);
+  const { workerInfo, isConnected, connectionId } = useWorkerConnection();
 
   // Fetch plan from API when connection changes
   useEffect(() => {
     const fetchPlan = async () => {
-      const connectionId = getConnectionIdentifier();
-      
-      // If connection changed, clear previous data first
-      if (currentConnectionId !== connectionId) {
-        setCurrentConnectionId(connectionId);
-        
-        // Clear any existing plan data when connection changes
+      // Clear any existing plan data when connection changes or no connection
+      if (!isConnected || !connectionId) {
         setPlan({
           stages: [],
           slos: [],
           polling_fraction: 0.1,
-          worker_name: ""
+          worker_name: "",
         });
         setError(null);
-        
-        // If no connection exists, stay in cleared state
-        if (!connectionId) {
-          setLoading(false);
-          return;
-        }
-      } else if (!connectionId) {
-        // No connection and no change - stay in cleared state
         setLoading(false);
         return;
       }
 
-      // Only fetch if we have a connection
-      if (connectionId) {
-        try {
-          setLoading(true);
-          setError(null);
+      // Fetch plan data if we have a connection
+      try {
+        setLoading(true);
+        setError(null);
 
-          const planData: Plan = await api.getPlan();
-          setPlan(planData);
-        } catch (err) {
-          console.error("Error fetching plan:", err);
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to fetch plan";
-          setError(errorMessage);
-          if (onError) {
-            onError(errorMessage);
-          }
-        } finally {
-          setLoading(false);
+        const planData: Plan = await api.getPlan();
+        setPlan(planData);
+      } catch (err) {
+        console.error("Error fetching plan:", err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch plan";
+        setError(errorMessage);
+        if (onError) {
+          onError(errorMessage);
         }
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchPlan();
-  }, [onError, currentConnectionId]);
-
-  // Watch for connection changes in sessionStorage
-  useEffect(() => {
-    const checkConnectionChange = () => {
-      const connectionId = getConnectionIdentifier();
-      if (currentConnectionId !== connectionId) {
-        setCurrentConnectionId(connectionId);
-      }
-    };
-
-    // Check for connection changes periodically
-    const interval = setInterval(checkConnectionChange, 1000);
-    
-    // Also check immediately
-    checkConnectionChange();
-
-    return () => clearInterval(interval);
-  }, [currentConnectionId]);
+  }, [onError, isConnected, connectionId]);
 
   const handleSave = async (updatedPlan: Plan) => {
     try {
       setSaveSuccess(false); // Clear any previous success state
 
-      // Get worker connection details from session storage
-      const workerConnectionStr = sessionStorage.getItem("workerConnection");
-      let planWithWorkerDetails = { ...updatedPlan };
-
-      if (workerConnectionStr) {
-        try {
-          const workerConnection = JSON.parse(workerConnectionStr);
-          planWithWorkerDetails = {
-            ...updatedPlan,
-            worker_name: workerConnection.workerName,
-          };
-        } catch (parseError) {
-          console.error("Error parsing worker connection:", parseError);
-          // Continue with plan save without worker details
-        }
-      }
+      // Use worker info from the hook
+      const planWithWorkerDetails = {
+        ...updatedPlan,
+        worker_name: workerInfo?.name || "",
+      };
 
       const data = await api.updatePlan(planWithWorkerDetails);
       setPlan(data);
@@ -285,6 +241,17 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   const handleRetry = () => {
     window.location.reload();
   };
+
+  // Show empty state when no connection
+  if (!isConnected) {
+    return (
+      <EmptyState
+        title="No Worker Connection"
+        description="Connect to a Cloudflare Worker to view and manage your release plan."
+        icon="🔗"
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -311,15 +278,15 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
 
   if (!plan) {
     return (
-      <div className="error-container">
-        <div className="error-box">
-          <h3 className="error-title">No Plan Found</h3>
-          <p className="error-message">No release plan was found.</p>
-        </div>
-        <button onClick={handleRetry} className="retry-button">
-          Retry
-        </button>
-      </div>
+      <EmptyState
+        title="No Plan Found"
+        description="No release plan was found for this worker."
+        action={{
+          label: "Refresh",
+          onClick: handleRetry,
+        }}
+        icon="📋"
+      />
     );
   }
 

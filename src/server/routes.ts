@@ -7,7 +7,6 @@ import { PlanStorage } from "./plan";
 import { StageStorage } from "./stage";
 import { ReleaseHistory } from "./releaseHistory";
 import { ReleaseWorkflow, ReleaseWorkflowParams } from "./releaseWorkflow";
-// Use Web Crypto API instead of Node.js crypto in Cloudflare Workers
 
 type Plan = components["schemas"]["Plan"];
 type Release = components["schemas"]["Release"];
@@ -24,28 +23,34 @@ function getStageId(releaseId: string, stageOrder: string | number): string {
   return `release-${releaseId}-order-${stageOrder}`;
 }
 
-async function hashApiToken(apiToken: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(apiToken);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex.slice(0, 8);
+/**
+ * Get ReleaseHistory Durable Object stub with account-specific ID
+ */
+export function getReleaseHistory(
+  env: Cloudflare.Env,
+  connectionId: string,
+): DurableObjectStub<ReleaseHistory> {
+  return env.RELEASE_HISTORY.get(env.RELEASE_HISTORY.idFromName(connectionId));
 }
 
-async function getReleaseHistory(c: any, accountId: string, workerName: string, hashedApiToken: string): Promise<ReleaseHistory> {
-  return await c.env.RELEASE_HISTORY.get(
-    c.env.RELEASE_HISTORY.idFromName(accountId + "-" + workerName + "-" + hashedApiToken),
-  );
+/**
+ * Get Plan Storage Durable Object stub with account-specific ID
+ */
+export function getPlanStorage(
+  env: Cloudflare.Env,
+  connectionId: string,
+): DurableObjectStub<PlanStorage> {
+  return env.PLAN_STORAGE.get(env.PLAN_STORAGE.idFromName(connectionId));
 }
 
-async function getPlan(c: any, accountId: string, workerName: string, hashedApiToken: string): Promise<PlanStorage> {
-  console.log(accountId + "-" + workerName + "-" + hashedApiToken);
-  return await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName(accountId + "-" + workerName + "-" + hashedApiToken));
-}
-
-async function getStage(c: any, stageId: string): Promise<StageStorage> {
-  return await c.env.STAGE_STORAGE.get(c.env.STAGE_STORAGE.idFromName(stageId));
+/**
+ * Get Stage Storage Durable Object stub with stage-specific ID
+ */
+export function getStageStorage(
+  env: Cloudflare.Env,
+  stageId: string,
+): DurableObjectStub<StageStorage> {
+  return env.STAGE_STORAGE.get(env.STAGE_STORAGE.idFromName(stageId));
 }
 
 const VALID_STATES = [
@@ -76,51 +81,62 @@ app.get("/docs", async (c) =>
 
 const api = new Hono<{ Bindings: Cloudflare.Env }>();
 
-api.post("/plan", 
+api.post(
+  "/plan",
   validator("json", (value, c) => {
-    const body = value as { accountId?: string; workerName?: string; apiToken?: string };
-    if (!body.accountId || !body.workerName || !body.apiToken) {
+    const body = value as { connectionId: string };
+    if (!body.connectionId) {
       return c.json(
         {
-          message: "Missing required fields: accountId, workerName, and apiToken are required",
+          message: "Missing required field: connectionId",
           ok: false,
         },
         400,
       );
     }
-    return {
-      accountId: body.accountId,
-      workerName: body.workerName,
-      apiToken: body.apiToken
-    };
+    return body;
   }),
   async (c) => {
     try {
-      const { accountId, workerName, apiToken } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const plan = await (await getPlan(c, accountId, workerName, hashedApiToken)).get();
+      const { connectionId } = c.req.valid("json");
+      const plan = await getPlanStorage(
+        c.env,
+        connectionId,
+      ).get();
       return c.json<Plan>(plan, 200);
     } catch (error) {
       console.error("Error getting plan:", error);
       return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
-  }
+  },
 );
 
 api.put(
   "/plan",
   validator("json", (value, c) => {
-    const body = value as { connection: { accountId: string; workerName: string; apiToken: string }; plan: Plan };
-    if (!body.connection || !body.connection.accountId || !body.connection.workerName || !body.connection.apiToken) {
+    const body = value as {
+      connectionId: string;
+      plan: Plan;
+    };
+    if (
+      !body.connectionId
+    ) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required connectionId field",
           ok: false,
         },
         400,
       );
     }
-    if (!body.plan || !body.plan.stages || !Array.isArray(body.plan.stages) || !body.plan.slos || !Array.isArray(body.plan.slos)) {
+    if (
+      !body.plan ||
+      !body.plan.stages ||
+      !Array.isArray(body.plan.stages) ||
+      !body.plan.slos ||
+      !Array.isArray(body.plan.slos)
+    ) {
       return c.json(
         {
           message: "Invalid plan: must include stages and slos arrays",
@@ -133,9 +149,11 @@ api.put(
   }),
   async (c) => {
     try {
-      const { connection, plan } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(connection.apiToken);
-      const updatedPlan = await (await getPlan(c, connection.accountId, connection.workerName, hashedApiToken)).updatePlan(plan);
+      const { connectionId, plan } = c.req.valid("json");
+      const updatedPlan = await getPlanStorage(
+        c.env,
+        connectionId,
+      ).updatePlan(plan);
       return c.json<Plan>(updatedPlan, 200);
     } catch (error) {
       console.error("Error updating plan:", error);
@@ -144,20 +162,24 @@ api.put(
   },
 );
 
-api.post("/release",
+api.post(
+  "/release",
   validator("json", (value, c) => {
     const body = value as {
-      connection: { accountId: string; workerName: string; apiToken: string };
+      connectionId: string;
       limit?: number;
       offset?: number;
       since?: string;
       until?: string;
       state?: string;
     };
-    if (!body.connection || !body.connection.accountId || !body.connection.workerName || !body.connection.apiToken) {
+    if (
+      !body.connectionId
+    ) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required connectionId field",
           ok: false,
         },
         400,
@@ -167,8 +189,15 @@ api.post("/release",
   }),
   async (c) => {
     try {
-      const { connection, limit = 50, offset = 0, since, until, state } = c.req.valid("json");
-      
+      const {
+        connectionId,
+        limit = 50,
+        offset = 0,
+        since,
+        until,
+        state,
+      } = c.req.valid("json");
+
       if (limit < 1 || limit > 100) {
         return c.json(
           { message: "Limit must be between 1 and 100", ok: false },
@@ -176,73 +205,80 @@ api.post("/release",
         );
       }
       if (offset < 0) {
-        return c.json({ message: "Offset must be non-negative", ok: false }, 400);
-      }
-
-      const hashedApiToken = await hashApiToken(connection.apiToken);
-      const releaseHistory = await getReleaseHistory(c, connection.accountId, connection.workerName, hashedApiToken);
-    let releases = await releaseHistory.getAllReleases();
-
-    if (since) {
-      const sinceDate = new Date(since);
-      if (isNaN(sinceDate.getTime())) {
         return c.json(
-          { message: "Invalid 'since' timestamp format", ok: false },
+          { message: "Offset must be non-negative", ok: false },
           400,
         );
       }
-      releases = releases.filter(
-        (release: Release) => new Date(release.time_created) >= sinceDate,
+
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
       );
-    }
+      let releases = await releaseHistory.getAllReleases();
 
-    if (until) {
-      const untilDate = new Date(until);
-      if (isNaN(untilDate.getTime())) {
-        return c.json(
-          { message: "Invalid 'until' timestamp format", ok: false },
-          400,
+      if (since) {
+        const sinceDate = new Date(since);
+        if (isNaN(sinceDate.getTime())) {
+          return c.json(
+            { message: "Invalid 'since' timestamp format", ok: false },
+            400,
+          );
+        }
+        releases = releases.filter(
+          (release: Release) => new Date(release.time_created) >= sinceDate,
         );
       }
-      releases = releases.filter(
-        (release: Release) => new Date(release.time_created) <= untilDate,
-      );
-    }
 
-    if (state) {
-      if (!VALID_STATES.includes(state)) {
-        return c.json(
-          {
-            message: `Invalid state. Must be one of: ${VALID_STATES.join(", ")}`,
-            ok: false,
-          },
-          400,
+      if (until) {
+        const untilDate = new Date(until);
+        if (isNaN(untilDate.getTime())) {
+          return c.json(
+            { message: "Invalid 'until' timestamp format", ok: false },
+            400,
+          );
+        }
+        releases = releases.filter(
+          (release: Release) => new Date(release.time_created) <= untilDate,
         );
       }
-      releases = releases.filter((release: Release) => release.state === state);
+
+      if (state) {
+        if (!VALID_STATES.includes(state)) {
+          return c.json(
+            {
+              message: `Invalid state. Must be one of: ${VALID_STATES.join(", ")}`,
+              ok: false,
+            },
+            400,
+          );
+        }
+        releases = releases.filter(
+          (release: Release) => release.state === state,
+        );
+      }
+
+      const paginatedReleases = releases.slice(offset, offset + limit);
+      return c.json(paginatedReleases, 200);
+    } catch (error) {
+      console.error("Error getting releases:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
+  },
+);
 
-    const paginatedReleases = releases.slice(offset, offset + limit);
-    return c.json(paginatedReleases, 200);
-  } catch (error) {
-    console.error("Error getting releases:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.post("/release/create",
+api.post(
+  "/release/create",
   validator("json", (value, c) => {
     const body = value as {
-      accountId: string;
-      workerName: string;
-      apiToken: string;
+      connectionId: string;
       old_version?: string;
       new_version?: string;
     };
-    if (!body.accountId || !body.workerName || !body.apiToken) {
+    if (!body.connectionId) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message: "Missing required connection fields: connectionId is required",
           ok: false,
         },
         400,
@@ -252,66 +288,80 @@ api.post("/release/create",
   }),
   async (c) => {
     try {
-      const { accountId, workerName, apiToken, old_version, new_version } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const { connectionId, old_version, new_version } =
+        c.req.valid("json");
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
+      );
 
       const hasActiveRelease = await releaseHistory.hasActiveRelease();
       if (hasActiveRelease) {
-        return c.json({ message: "A release is already staged", ok: false }, 409);
+        return c.json(
+          { message: "A release is already staged", ok: false },
+          409,
+        );
       }
 
-      const planStorage = await getPlan(c, accountId, workerName, hashedApiToken);
-    const plan = await planStorage.get();
-    const releaseId = crypto.randomUUID().replace(/-/g, "").substring(0, 8);
-    const currentTime = new Date().toISOString();
+      const planStorage = getPlanStorage(
+        c.env,
+        connectionId,
+      );
+      const plan = await planStorage.get();
+      const releaseId = crypto.randomUUID().replace(/-/g, "").substring(0, 8);
+      const currentTime = new Date().toISOString();
 
-    const newRelease: Release = {
-      id: releaseId,
-      state: "not_started",
-      plan_record: plan,
-      old_version: old_version || "",
-      new_version: new_version || "",
-      stages: plan.stages.map((stage: any) => ({
-        id: `release-${releaseId}-order-${stage.order}`,
-        order: stage.order,
-      })),
-      time_created: currentTime,
-      time_started: "",
-      time_elapsed: 0,
-      time_done: "",
-    };
-
-    for (const planStage of plan.stages) {
-      const stageId = getStageId(releaseId, planStage.order);
-      const stage = await getStage(c, stageId);
-      await stage.initialize({
-        id: stageId,
-        order: planStage.order,
-        releaseId: releaseId,
-        state: "queued",
+      const newRelease: Release = {
+        id: releaseId,
+        state: "not_started",
+        plan_record: plan,
+        old_version: old_version || "",
+        new_version: new_version || "",
+        stages: plan.stages.map((stage: any) => ({
+          id: `release-${releaseId}-order-${stage.order}`,
+          order: stage.order,
+        })),
+        time_created: currentTime,
         time_started: "",
         time_elapsed: 0,
         time_done: "",
-        logs: "",
-      });
+      };
+
+      for (const planStage of plan.stages) {
+        const stageId = getStageId(releaseId, planStage.order);
+        const stage = getStageStorage(c.env, stageId);
+        await stage.initialize({
+          id: stageId,
+          order: planStage.order,
+          releaseId: releaseId,
+          state: "queued",
+          time_started: "",
+          time_elapsed: 0,
+          time_done: "",
+          logs: "",
+        });
+      }
+
+      const createdRelease = await releaseHistory.createRelease(newRelease);
+      return c.json(createdRelease, 200);
+    } catch (error) {
+      console.error("Error creating release:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
+  },
+);
 
-    const createdRelease = await releaseHistory.createRelease(newRelease);
-    return c.json(createdRelease, 200);
-  } catch (error) {
-    console.error("Error creating release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.post("/release/active/get",
+api.post(
+  "/release/active/get",
   validator("json", (value, c) => {
-    const body = value as { accountId: string; workerName: string; apiToken: string };
-    if (!body.accountId || !body.workerName || !body.apiToken) {
+    const body = value as {
+      connectionId: string;
+    };
+    if (!body.connectionId) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required connection fields: connectionId is required",
           ok: false,
         },
         400,
@@ -321,9 +371,11 @@ api.post("/release/active/get",
   }),
   async (c) => {
     try {
-      const { accountId, workerName, apiToken } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const { connectionId } = c.req.valid("json");
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
+      );
       const activeRelease = await releaseHistory.getActiveRelease();
 
       // Always return 200 OK - null when no active release, release object when active
@@ -332,23 +384,24 @@ api.post("/release/active/get",
       console.error("Error getting active release:", error);
       return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
-  }
+  },
 );
 
-api.post("/release/active",
+api.post(
+  "/release/active",
   validator("json", (value, c) => {
     const body = value as {
       accountId: string;
       workerName: string;
       apiToken: string;
       command: string;
-      account_id?: string;
-      api_token?: string;
+      connectionId: string;
     };
     if (!body.accountId || !body.workerName || !body.apiToken) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required connection fields: accountId, workerName, and apiToken are required",
           ok: false,
         },
         400,
@@ -358,98 +411,113 @@ api.post("/release/active",
   }),
   async (c) => {
     try {
-      const { accountId, workerName, apiToken, command, account_id, api_token } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const {
+        accountId,
+        workerName,
+        apiToken,
+        command,
+        connectionId,
+      } = c.req.valid("json");
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
+      );
       const activeRelease = await releaseHistory.getActiveRelease();
 
       if (!activeRelease) {
         return c.json({ message: "No active release found", ok: false }, 404);
       }
 
-    if (!command || (command !== "start" && command !== "stop")) {
-      return c.json(
-        { message: "Invalid command: must be 'start' or 'stop'", ok: false },
-        400,
-      );
-    }
-
-    const activeReleaseId = activeRelease.id;
-
-    if (command === "start") {
-      // Only allow starting if release is in not_started state
-      if (activeRelease.state !== "not_started") {
+      if (!command || (command !== "start" && command !== "stop")) {
         return c.json(
-          {
-            message: `Cannot start release in '${activeRelease.state}' state`,
-            ok: false,
-          },
+          { message: "Invalid command: must be 'start' or 'stop'", ok: false },
           400,
         );
       }
 
-      const releaseWorkflow = await c.env.RELEASE_WORKFLOW.create({
-        id: activeReleaseId,
-        params: {
-          releaseId: activeReleaseId,
-          accountId: account_id,
-          apiToken: api_token,
-        },
-      });
+      const activeReleaseId = activeRelease.id;
 
-      await releaseHistory.updateReleaseState(activeReleaseId, "running");
+      if (command === "start") {
+        // Only allow starting if release is in not_started state
+        if (activeRelease.state !== "not_started") {
+          return c.json(
+            {
+              message: `Cannot start release in '${activeRelease.state}' state`,
+              ok: false,
+            },
+            400,
+          );
+        }
 
-      releaseWorkflow.sendEvent({ type: "release-start", payload: null });
-
-      return c.text("Release started successfully", 200);
-    } else if (command === "stop") {
-      // Only allow stopping if release is in running state
-      if (activeRelease.state !== "running") {
-        return c.json(
-          {
-            message: `Cannot stop release in '${activeRelease.state}' state`,
-            ok: false,
+        const releaseWorkflow = await c.env.RELEASE_WORKFLOW.create({
+          id: activeReleaseId,
+          params: {
+            releaseId: activeReleaseId,
+            accountId: accountId,
+            workerName: workerName,
+            apiToken: apiToken,
+            connectionId: connectionId,
           },
-          400,
-        );
-      }
-
-      // This acts as a signal in the workflow to stop the release
-      // It would probably be better to terminate the workflow and have
-      // Cleanup logic up here. However, terminate doesn't seem to
-      // be implemented in miniflare yet
-      await releaseHistory.updateReleaseState(
-        activeRelease.id,
-        "done_stopped_manually",
-      );
-
-      // Deny any awaiting stages
-      for (const stageRef of activeRelease.stages) {
-        const stageId = getStageId(activeRelease.id, stageRef.order);
-        const releaseWorkflow = await c.env.RELEASE_WORKFLOW.get(
-          activeRelease.id,
-        );
-        await releaseWorkflow.sendEvent({
-          type: `${stageId}-user-progress-command`,
-          payload: "deny",
         });
+
+        await releaseHistory.updateReleaseState(activeReleaseId, "running");
+
+        releaseWorkflow.sendEvent({ type: "release-start", payload: null });
+
+        return c.text("Release started successfully", 200);
+      } else if (command === "stop") {
+        // Only allow stopping if release is in running state
+        if (activeRelease.state !== "running") {
+          return c.json(
+            {
+              message: `Cannot stop release in '${activeRelease.state}' state`,
+              ok: false,
+            },
+            400,
+          );
+        }
+
+        // This acts as a signal in the workflow to stop the release
+        // It would probably be better to terminate the workflow and have
+        // Cleanup logic up here. However, terminate is throwing a
+        // Not Implemented error
+        await releaseHistory.updateReleaseState(
+          activeRelease.id,
+          "done_stopped_manually",
+        );
+
+        // Deny any awaiting stages
+        for (const stageRef of activeRelease.stages) {
+          const stageId = getStageId(activeRelease.id, stageRef.order);
+          const releaseWorkflow = await c.env.RELEASE_WORKFLOW.get(
+            activeRelease.id,
+          );
+          await releaseWorkflow.sendEvent({
+            type: `${stageId}-user-progress-command`,
+            payload: "deny",
+          });
+        }
+
+        return c.text("Release stopping async", 200);
       }
-
-      return c.text("Release stopping async", 200);
+    } catch (error) {
+      console.error("Error controlling active release:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
-  } catch (error) {
-    console.error("Error controlling active release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
+  },
+);
 
-api.delete("/release/active",
+api.delete(
+  "/release/active",
   validator("json", (value, c) => {
-    const body = value as { accountId: string; workerName: string; apiToken: string };
-    if (!body.accountId || !body.workerName || !body.apiToken) {
+    const body = value as {
+      connectionId: string;
+    };
+    if (!body.connectionId) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required field: connectionId is required",
           ok: false,
         },
         400,
@@ -459,9 +527,11 @@ api.delete("/release/active",
   }),
   async (c) => {
     try {
-      const { accountId, workerName, apiToken } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const { connectionId } = c.req.valid("json");
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
+      );
       const activeRelease = await releaseHistory.getActiveRelease();
 
       if (!activeRelease) {
@@ -478,25 +548,30 @@ api.delete("/release/active",
         );
       }
 
-    const deleted = await releaseHistory.removeRelease(activeRelease.id);
-    if (!deleted) {
-      return c.json({ message: "Release not found", ok: false }, 404);
+      const deleted = await releaseHistory.removeRelease(activeRelease.id);
+      if (!deleted) {
+        return c.json({ message: "Release not found", ok: false }, 404);
+      }
+
+      return c.text("Release deleted", 200);
+    } catch (error) {
+      console.error("Error deleting active release:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
+  },
+);
 
-    return c.text("Release deleted", 200);
-  } catch (error) {
-    console.error("Error deleting active release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.post("/release/:releaseId",
+api.post(
+  "/release/:releaseId",
   validator("json", (value, c) => {
-    const body = value as { accountId: string; workerName: string; apiToken: string };
-    if (!body.accountId || !body.workerName || !body.apiToken) {
+    const body = value as {
+      connectionId: string;
+    };
+    if (!body.connectionId) {
       return c.json(
         {
-          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          message:
+            "Missing required field: connectionId is required",
           ok: false,
         },
         400,
@@ -511,9 +586,11 @@ api.post("/release/:releaseId",
         return c.json({ message: "Release not found", ok: false }, 404);
       }
 
-      const { accountId, workerName, apiToken } = c.req.valid("json");
-      const hashedApiToken = await hashApiToken(apiToken);
-      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const { connectionId } = c.req.valid("json");
+      const releaseHistory = getReleaseHistory(
+        c.env,
+        connectionId,
+      );
       const release = await releaseHistory.getRelease(releaseId);
 
       if (!release) {
@@ -525,7 +602,7 @@ api.post("/release/:releaseId",
       console.error("Error getting release:", error);
       return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
-  }
+  },
 );
 
 api.get("/stage/:stageId", async (c) => {
@@ -536,7 +613,7 @@ api.get("/stage/:stageId", async (c) => {
       return c.json({ message: "Stage not found", ok: false }, 404);
     }
 
-    const stage = await getStage(c, stageId);
+    const stage = getStageStorage(c.env, stageId);
     const stageData = await stage.get();
 
     if (!stageData) {
@@ -567,7 +644,7 @@ api.post("/stage/:stageId", async (c) => {
       );
     }
 
-    const stage = await getStage(c, stageId);
+    const stage = getStageStorage(c.env, stageId);
     await stage.progressStage(command);
 
     const releaseId = (await stage.get())?.releaseId;

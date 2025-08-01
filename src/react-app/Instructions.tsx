@@ -84,8 +84,8 @@ export const Instructions: React.FC = () => {
             <div>
               <ol style={{ margin: "0", paddingLeft: "1.2rem" }}>
                 <li style={{ marginBottom: "0.5rem" }}>
-                  <strong>Release Definition</strong>: users define a release
-                  plan with…
+                  <strong>Release Definition</strong>: define a release plan
+                  with…
                   <ul style={{ marginTop: "0.25rem" }}>
                     <li>
                       <a
@@ -112,16 +112,16 @@ export const Instructions: React.FC = () => {
                 </li>
                 <li style={{ marginBottom: "0.5rem" }}>
                   <strong>Version Creation</strong>: To initiate a production
-                  release, users create a new Worker version. By default, this
-                  has 0% traffic routed to it.
+                  release, create a new Worker version. By default, this has 0%
+                  traffic routed to it.
                 </li>
                 <li style={{ marginBottom: "0.5rem" }}>
-                  <strong>Release Start</strong>: Users then start a release,
-                  which is an instance of the release plan. Each stage in the
-                  plan progressively increases the percentage of traffic
-                  directed from the current Worker version to the new one. For
-                  example, a release might consist of stages at 0%, 25%, 50%,
-                  75%, and 100% rollout.
+                  <strong>Release Start</strong>: Then start a release, which is
+                  an instance of the release plan. Each stage in the plan
+                  progressively increases the percentage of traffic directed
+                  from the current Worker version to the new one. For example, a
+                  release might consist of stages at 0%, 25%, 50%, 75%, and 100%
+                  rollout.
                 </li>
                 <li style={{ marginBottom: "0.5rem" }}>
                   <strong>Staged Rollout with Soak Periods</strong>: Within each

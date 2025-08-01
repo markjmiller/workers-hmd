@@ -5,30 +5,61 @@ import {
 } from "cloudflare:workers";
 import { Cloudflare as cf } from "cloudflare";
 import { components } from "../../types/api";
-import { ReleaseHistory } from "./releaseHistory";
 import { StageStorage } from "./stage";
+import { ReleaseHistory } from "./releaseHistory";
 import { SLOEvaluator } from "./sloEvaluator";
 import { v4 as uuidv4 } from "uuid";
+import { PlanStorage } from "./plan";
 
 type StageRef = components["schemas"]["StageRef"];
 type PlanStage = components["schemas"]["PlanStage"];
 type Release = components["schemas"]["Release"];
 
+/**
+ * Get ReleaseHistory Durable Object stub with account-specific ID
+ */
+export function getReleaseHistory(
+  env: Cloudflare.Env,
+  accountSpecificId: string,
+): DurableObjectStub<ReleaseHistory> {
+  return env.RELEASE_HISTORY.get(env.RELEASE_HISTORY.idFromName(accountSpecificId));
+}
+
+/**
+ * Get Plan Storage Durable Object stub with account-specific ID
+ */
+export function getPlanStorage(
+  env: Cloudflare.Env,
+  connectionId: string,
+): DurableObjectStub<PlanStorage> {
+  return env.PLAN_STORAGE.get(env.PLAN_STORAGE.idFromName(connectionId));
+}
+
+/**
+ * Get Stage Storage Durable Object stub with stage-specific ID
+ */
+export function getStageStorage(
+  env: Cloudflare.Env,
+  stageId: string,
+): DurableObjectStub<StageStorage> {
+  return env.STAGE_STORAGE.get(env.STAGE_STORAGE.idFromName(stageId));
+}
+
 export type ReleaseWorkflowParams = {
   releaseId: string;
   accountId: string;
+  workerName: string;
   apiToken: string;
+  connectionId: string;
 };
 
 export class ReleaseWorkflow extends WorkflowEntrypoint<
   Cloudflare.Env,
   ReleaseWorkflowParams
 > {
-  private getReleaseHistory() {
-    return this.env.RELEASE_HISTORY.get(
-      this.env.RELEASE_HISTORY.idFromName("main"),
-    );
-  }
+  private connectionId: string = "";
+  private accountId: string = "";
+  private workerName: string = "";
 
   private getStageStorage(releaseId: string, stageOrder: number) {
     return this.env.STAGE_STORAGE.get(
@@ -59,15 +90,21 @@ export class ReleaseWorkflow extends WorkflowEntrypoint<
   }
 
   private client: cf | undefined;
-  private accountId: string | undefined;
 
   async run(
     event: WorkflowEvent<ReleaseWorkflowParams>,
     step: WorkflowStep,
   ): Promise<void> {
-    const { releaseId, accountId, apiToken } = event.payload;
-    const releaseHistory = this.env.RELEASE_HISTORY.get(
-      this.env.RELEASE_HISTORY.idFromName("main"),
+    const { releaseId, accountId, workerName, apiToken, connectionId } =
+      event.payload;
+
+    this.connectionId = connectionId;
+    this.accountId = accountId;
+    this.workerName = workerName;
+    console.log("workflow", accountId, workerName, connectionId);
+    const releaseHistory = getReleaseHistory(
+      this.env,
+      connectionId,
     );
 
     let release: Release | undefined;
@@ -108,29 +145,17 @@ Account ID: ${this.accountId}
           console.log(
             `🛑 Release ${releaseId} was cancelled - reverting deployment`,
           );
-          await this.revertDeployment(
-            releaseId,
-            release!.plan_record.worker_name,
-            release!.old_version,
-          );
+          await this.revertDeployment(releaseId, release!.old_version);
         } else if (specificRelease?.state === "done_failed_slo") {
           console.log(
             `💥 Release ${releaseId} failed SLO - reverting deployment`,
           );
-          await this.revertDeployment(
-            releaseId,
-            release!.plan_record.worker_name,
-            release!.old_version,
-          );
+          await this.revertDeployment(releaseId, release!.old_version);
         } else {
           // Release completed successfully
           await releaseHistory.updateReleaseState(releaseId, "done_successful");
           console.log(`🎉 Release ${releaseId} completed successfully`);
-          await this.finishDeployment(
-            releaseId,
-            release!.plan_record.worker_name,
-            release!.new_version,
-          );
+          await this.finishDeployment(releaseId, release!.new_version);
         }
       });
     } catch (error) {
@@ -138,7 +163,10 @@ Account ID: ${this.accountId}
 
       await step.do("handle workflow error and revert deployment", async () => {
         // Handle workflow error inline to ensure state changes are in workflow step
-        const releaseHistory = this.getReleaseHistory();
+        const releaseHistory = getReleaseHistory(
+          this.env,
+          this.connectionId,
+        );
         const currentRelease = await releaseHistory.getRelease(releaseId);
 
         if (currentRelease) {
@@ -154,7 +182,6 @@ Account ID: ${this.accountId}
         if (release) {
           await this.revertDeployment(
             releaseId,
-            release.plan_record.worker_name,
             release.old_version,
           );
         }
@@ -205,7 +232,6 @@ Account ID: ${this.accountId}
         await stage.updateStageState("running");
         await this.setDeploymentTarget(
           releaseId,
-          release.plan_record.worker_name,
           stagePlan.target_percent,
           release.old_version,
           release.new_version,
@@ -214,7 +240,6 @@ Account ID: ${this.accountId}
 
       const soakResult = await this.processStageSoak(
         releaseId,
-        release.plan_record.worker_name,
         step,
         stageRef,
         stagePlan,
@@ -252,7 +277,10 @@ Account ID: ${this.accountId}
     currentStageOrder: number,
   ) {
     await step.do("handle external cancellation", async () => {
-      const releaseHistory = this.getReleaseHistory();
+      const releaseHistory = getReleaseHistory(
+        this.env,
+        this.connectionId,
+      );
       const release = await releaseHistory.getRelease(releaseId);
 
       if (release) {
@@ -274,11 +302,7 @@ Account ID: ${this.accountId}
         );
 
         // Revert deployment to old version
-        await this.revertDeployment(
-          releaseId,
-          release.plan_record.worker_name,
-          release.old_version,
-        );
+        await this.revertDeployment(releaseId, release.old_version);
 
         console.log(
           `🛑 External cancellation handled - updated ${remainingStages.length} stages to cancelled, reverted deployment, and set release to stopped`,
@@ -294,7 +318,10 @@ Account ID: ${this.accountId}
     currentStageId: string,
   ) {
     await step.do("handle SLO violation", async () => {
-      const releaseHistory = this.getReleaseHistory();
+      const releaseHistory = getReleaseHistory(
+        this.env,
+        this.connectionId,
+      );
       const release = await releaseHistory.getRelease(releaseId);
 
       if (release) {
@@ -327,13 +354,15 @@ Account ID: ${this.accountId}
 
   private async processStageSoak(
     releaseId: string,
-    workerName: string,
     step: WorkflowStep,
     stageRef: StageRef,
     stagePlan: PlanStage,
   ): Promise<"continue" | "exit"> {
     // Get release to access plan polling configuration
-    const releaseHistory = this.getReleaseHistory();
+    const releaseHistory = getReleaseHistory(
+      this.env,
+      this.connectionId,
+    );
     const release = await releaseHistory.getRelease(releaseId);
 
     // Calculate interval time based on plan-level polling_fraction
@@ -351,7 +380,10 @@ Account ID: ${this.accountId}
       // Check for cancellation every 1 second within this interval
       for (let j = 0; j < intervalTimeSeconds; j++) {
         // Check if release was stopped
-        const releaseHistory = this.getReleaseHistory();
+        const releaseHistory = getReleaseHistory(
+          this.env,
+          this.connectionId,
+        );
         const release = await releaseHistory.getRelease(releaseId);
         if (release?.state !== "running") {
           await this.handleExternalCancellation(
@@ -365,7 +397,6 @@ Account ID: ${this.accountId}
       }
       console.log(`🛁 Stage ${stageRef.order} soak - Checking SLOs`);
       const wallTimes = await this.getWallTimes(
-        workerName,
         Date.now() - intervalTimeSeconds * 1000,
         Date.now(),
       );
@@ -478,11 +509,7 @@ P50 Wall: ${wallTimes.median}
             );
             console.log(`🛑 Release stopped - stage ${stageRef.order} denied`);
             // Revert deployment when release is manually cancelled
-            await this.revertDeployment(
-              releaseId,
-              release.plan_record.worker_name,
-              release.old_version,
-            );
+            await this.revertDeployment(releaseId, release.old_version);
           },
         );
 
@@ -495,7 +522,6 @@ P50 Wall: ${wallTimes.median}
 
   private async setDeploymentTarget(
     releaseId: string,
-    worker_name: string,
     target_percent: number,
     old_version_id: string,
     new_version_id: string,
@@ -503,12 +529,12 @@ P50 Wall: ${wallTimes.median}
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
-Worker: ${worker_name}
+Worker: ${this.workerName}
 Old Version: ${old_version_id} (${100 - target_percent}%)
 New Version: ${new_version_id} (${target_percent}%)
 ================================
     `);
-    await this.client!.workers.scripts.deployments.create(worker_name, {
+    await this.client!.workers.scripts.deployments.create(this.workerName, {
       account_id: this.accountId!,
       strategy: "percentage",
       versions: [
@@ -529,17 +555,16 @@ New Version: ${new_version_id} (${target_percent}%)
 
   private async finishDeployment(
     releaseId: string,
-    worker_name: string,
     new_version_id: string,
   ) {
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
-Worker: ${worker_name}
+Worker: ${this.workerName}
 Finishing deployment with new version: ${new_version_id}
 ================================
     `);
-    await this.client!.workers.scripts.deployments.create(worker_name, {
+    await this.client!.workers.scripts.deployments.create(this.workerName, {
       account_id: this.accountId!,
       strategy: "percentage",
       versions: [
@@ -556,17 +581,16 @@ Finishing deployment with new version: ${new_version_id}
 
   private async revertDeployment(
     releaseId: string,
-    worker_name: string,
     old_version_id: string,
   ) {
     console.log(`
 === CF DEPLOYMENT API REQUEST ===
 Account: ${this.accountId}
-Worker: ${worker_name}
+Worker: ${this.workerName}
 Reverting to old version: ${old_version_id}
 ================================
     `);
-    await this.client!.workers.scripts.deployments.create(worker_name, {
+    await this.client!.workers.scripts.deployments.create(this.workerName, {
       account_id: this.accountId!,
       strategy: "percentage",
       versions: [
@@ -582,7 +606,6 @@ Reverting to old version: ${old_version_id}
   }
 
   private async getWallTimes(
-    workerName: string,
     from: number,
     to: number,
   ): Promise<{ p999: number; p99: number; p90: number; median: number }> {
@@ -602,7 +625,7 @@ Reverting to old version: ${old_version_id}
             {
               key: "$workers.scriptName",
               operation: "eq",
-              value: workerName,
+              value: this.workerName,
               type: "string",
               id: uuidv4(),
             },

@@ -75,16 +75,19 @@ export const Connect: React.FC<ConnectProps> = ({ onConnectionChange }) => {
         const data = await response.json();
         if (data.success && data.result) {
           // Connection successful - store in session storage with hashed token for security
-          const { hashApiToken } = await import('./utils');
+          const { hashApiToken } = await import("./utils");
           const hashedToken = await hashApiToken(formData.apiToken);
-          
+
           const connectionData = {
             accountId: formData.accountId,
             workerName: formData.workerName,
-            hashedApiToken: hashedToken
+            hashedApiToken: hashedToken,
           };
-          
-          sessionStorage.setItem("workerConnection", JSON.stringify(connectionData));
+
+          sessionStorage.setItem(
+            "workerConnection",
+            JSON.stringify(connectionData),
+          );
           sessionStorage.setItem("apiToken", formData.apiToken); // Keep raw token separate for API calls
           setIsConnected(true);
           onConnectionChange(true);

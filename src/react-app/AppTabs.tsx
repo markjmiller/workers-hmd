@@ -58,7 +58,7 @@ export const AppTabs: React.FC<AppTabsProps> = ({ planEditor }) => {
   // Check for worker connection on component mount
   useEffect(() => {
     const connectionId = getConnectionIdentifier();
-    
+
     if (connectionId) {
       setIsWorkerConnected(true);
       // Don't automatically switch tabs - let user choose

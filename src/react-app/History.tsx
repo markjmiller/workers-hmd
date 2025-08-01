@@ -7,8 +7,9 @@ import {
   api,
   isReleaseComplete,
   getShortVersionId,
-  getConnectionIdentifier,
 } from "./utils";
+import { useWorkerConnection } from "./hooks/useWorkerConnection";
+import { EmptyState } from "./components/EmptyState";
 import "./History.css";
 
 type Release = components["schemas"]["Release"];
@@ -34,10 +35,12 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
     Record<string, ReleaseStage[]>
   >({});
 
+  // Use shared connection hook
+  const { isConnected, connectionId } = useWorkerConnection();
+
   useEffect(() => {
     // Check if worker connection exists before making API calls
-    const connectionId = getConnectionIdentifier();
-    if (!connectionId) {
+    if (!isConnected || !connectionId) {
       // No connection exists - reset to default state and don't make API calls
       setLoading(false);
       setReleases([]);
@@ -49,7 +52,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
 
     // Connection exists - proceed with fetching release history
     fetchReleaseHistory(true);
-  }, []);
+  }, [isConnected, connectionId]);
 
   const fetchReleaseHistory = async (
     resetPage = false,
@@ -94,7 +97,9 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         queryParams.set("until", endOfDay.toISOString());
       }
 
-      const releaseHistory = await api.getReleaseHistory(Object.fromEntries(queryParams));
+      const releaseHistory = await api.getReleaseHistory(
+        Object.fromEntries(queryParams),
+      );
       // Filter out active releases to show only completed releases
       const completedReleases = releaseHistory.filter((release: Release) =>
         isReleaseComplete(release.state),
@@ -225,6 +230,17 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
       return `${secs}s`;
     }
   };
+
+  // Show empty state when no connection
+  if (!isConnected) {
+    return (
+      <EmptyState
+        title="No Worker Connection"
+        description="Connect to a Cloudflare Worker to view release history."
+        icon="📊"
+      />
+    );
+  }
 
   return (
     <div className="history-container">
