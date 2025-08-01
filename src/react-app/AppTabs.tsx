@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Release } from "./Release";
 import { History } from "./History";
 import { Connect } from "./Connect";
-import { api } from "./utils";
+import { api, getConnectionIdentifier } from "./utils";
 import "./AppTabs.css";
 import type { components } from "../../types/api";
 
@@ -57,10 +57,15 @@ export const AppTabs: React.FC<AppTabsProps> = ({ planEditor }) => {
 
   // Check for worker connection on component mount
   useEffect(() => {
-    const savedConnection = sessionStorage.getItem("workerConnection");
-    if (savedConnection) {
+    const connectionId = getConnectionIdentifier();
+    
+    if (connectionId) {
       setIsWorkerConnected(true);
       // Don't automatically switch tabs - let user choose
+    } else {
+      setIsWorkerConnected(false);
+      // Ensure Connect tab is selected when no connection exists
+      setActiveTab("connect");
     }
   }, []);
 

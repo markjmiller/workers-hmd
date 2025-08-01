@@ -7,6 +7,7 @@ import { PlanStorage } from "./plan";
 import { StageStorage } from "./stage";
 import { ReleaseHistory } from "./releaseHistory";
 import { ReleaseWorkflow, ReleaseWorkflowParams } from "./releaseWorkflow";
+// Use Web Crypto API instead of Node.js crypto in Cloudflare Workers
 
 type Plan = components["schemas"]["Plan"];
 type Release = components["schemas"]["Release"];
@@ -23,18 +24,24 @@ function getStageId(releaseId: string, stageOrder: string | number): string {
   return `release-${releaseId}-order-${stageOrder}`;
 }
 
-// TODO: this should take in account id and worker name to use for the DO id
-// This will make sure each plan and release history is unique to the worker connection
-async function getReleaseHistory(c: any): Promise<ReleaseHistory> {
+async function hashApiToken(apiToken: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(apiToken);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex.slice(0, 8);
+}
+
+async function getReleaseHistory(c: any, accountId: string, workerName: string, hashedApiToken: string): Promise<ReleaseHistory> {
   return await c.env.RELEASE_HISTORY.get(
-    c.env.RELEASE_HISTORY.idFromName("main"),
+    c.env.RELEASE_HISTORY.idFromName(accountId + "-" + workerName + "-" + hashedApiToken),
   );
 }
 
-// TODO: this should take in account id and worker name to use for the DO id
-// This will make sure each plan and release history is unique to the worker connection
-async function getPlan(c: any): Promise<PlanStorage> {
-  return await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName("main"));
+async function getPlan(c: any, accountId: string, workerName: string, hashedApiToken: string): Promise<PlanStorage> {
+  console.log(accountId + "-" + workerName + "-" + hashedApiToken);
+  return await c.env.PLAN_STORAGE.get(c.env.PLAN_STORAGE.idFromName(accountId + "-" + workerName + "-" + hashedApiToken));
 }
 
 async function getStage(c: any, stageId: string): Promise<StageStorage> {
@@ -69,26 +76,51 @@ app.get("/docs", async (c) =>
 
 const api = new Hono<{ Bindings: Cloudflare.Env }>();
 
-api.get("/plan", async (c) => {
-  try {
-    const plan = await (await getPlan(c)).get();
-    return c.json<Plan>(plan, 200);
-  } catch (error) {
-    console.error("Error getting plan:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
+api.post("/plan", 
+  validator("json", (value, c) => {
+    const body = value as { accountId?: string; workerName?: string; apiToken?: string };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
+      return c.json(
+        {
+          message: "Missing required fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
+    }
+    return {
+      accountId: body.accountId,
+      workerName: body.workerName,
+      apiToken: body.apiToken
+    };
+  }),
+  async (c) => {
+    try {
+      const { accountId, workerName, apiToken } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const plan = await (await getPlan(c, accountId, workerName, hashedApiToken)).get();
+      return c.json<Plan>(plan, 200);
+    } catch (error) {
+      console.error("Error getting plan:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
+    }
   }
-});
+);
 
-api.post(
+api.put(
   "/plan",
   validator("json", (value, c) => {
-    const plan = value as Plan;
-    if (
-      !plan.stages ||
-      !Array.isArray(plan.stages) ||
-      !plan.slos ||
-      !Array.isArray(plan.slos)
-    ) {
+    const body = value as { connection: { accountId: string; workerName: string; apiToken: string }; plan: Plan };
+    if (!body.connection || !body.connection.accountId || !body.connection.workerName || !body.connection.apiToken) {
+      return c.json(
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
+    }
+    if (!body.plan || !body.plan.stages || !Array.isArray(body.plan.stages) || !body.plan.slos || !Array.isArray(body.plan.slos)) {
       return c.json(
         {
           message: "Invalid plan: must include stages and slos arrays",
@@ -97,12 +129,13 @@ api.post(
         400,
       );
     }
-    return plan;
+    return body;
   }),
   async (c) => {
     try {
-      const plan = c.req.valid("json");
-      const updatedPlan = await (await getPlan(c)).updatePlan(plan);
+      const { connection, plan } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(connection.apiToken);
+      const updatedPlan = await (await getPlan(c, connection.accountId, connection.workerName, hashedApiToken)).updatePlan(plan);
       return c.json<Plan>(updatedPlan, 200);
     } catch (error) {
       console.error("Error updating plan:", error);
@@ -111,25 +144,43 @@ api.post(
   },
 );
 
-api.get("/release", async (c) => {
-  try {
-    const limit = parseInt(c.req.query("limit") || "50");
-    const offset = parseInt(c.req.query("offset") || "0");
-    const since = c.req.query("since");
-    const until = c.req.query("until");
-    const state = c.req.query("state");
-
-    if (limit < 1 || limit > 100) {
+api.post("/release",
+  validator("json", (value, c) => {
+    const body = value as {
+      connection: { accountId: string; workerName: string; apiToken: string };
+      limit?: number;
+      offset?: number;
+      since?: string;
+      until?: string;
+      state?: string;
+    };
+    if (!body.connection || !body.connection.accountId || !body.connection.workerName || !body.connection.apiToken) {
       return c.json(
-        { message: "Limit must be between 1 and 100", ok: false },
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
         400,
       );
     }
-    if (offset < 0) {
-      return c.json({ message: "Offset must be non-negative", ok: false }, 400);
-    }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const { connection, limit = 50, offset = 0, since, until, state } = c.req.valid("json");
+      
+      if (limit < 1 || limit > 100) {
+        return c.json(
+          { message: "Limit must be between 1 and 100", ok: false },
+          400,
+        );
+      }
+      if (offset < 0) {
+        return c.json({ message: "Offset must be non-negative", ok: false }, 400);
+      }
 
-    const releaseHistory = await getReleaseHistory(c);
+      const hashedApiToken = await hashApiToken(connection.apiToken);
+      const releaseHistory = await getReleaseHistory(c, connection.accountId, connection.workerName, hashedApiToken);
     let releases = await releaseHistory.getAllReleases();
 
     if (since) {
@@ -179,20 +230,38 @@ api.get("/release", async (c) => {
   }
 });
 
-api.post("/release", async (c) => {
-  try {
-    const releaseHistory = await getReleaseHistory(c);
-
-    const hasActiveRelease = await releaseHistory.hasActiveRelease();
-    if (hasActiveRelease) {
-      return c.json({ message: "A release is already staged", ok: false }, 409);
+api.post("/release/create",
+  validator("json", (value, c) => {
+    const body = value as {
+      accountId: string;
+      workerName: string;
+      apiToken: string;
+      old_version?: string;
+      new_version?: string;
+    };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
+      return c.json(
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
     }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const { accountId, workerName, apiToken, old_version, new_version } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
 
-    // Parse request body to get version information
-    const requestBody = await c.req.json().catch(() => ({}));
-    const { old_version, new_version } = requestBody;
+      const hasActiveRelease = await releaseHistory.hasActiveRelease();
+      if (hasActiveRelease) {
+        return c.json({ message: "A release is already staged", ok: false }, 409);
+      }
 
-    const planStorage = await getPlan(c);
+      const planStorage = await getPlan(c, accountId, workerName, hashedApiToken);
     const plan = await planStorage.get();
     const releaseId = crypto.randomUUID().replace(/-/g, "").substring(0, 8);
     const currentTime = new Date().toISOString();
@@ -236,30 +305,67 @@ api.post("/release", async (c) => {
   }
 });
 
-api.get("/release/active", async (c) => {
-  try {
-    const releaseHistory = await getReleaseHistory(c);
-    const activeRelease = await releaseHistory.getActiveRelease();
-
-    // Always return 200 OK - null when no active release, release object when active
-    return c.json(activeRelease ?? null, 200);
-  } catch (error) {
-    console.error("Error getting active release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
-  }
-});
-
-api.post("/release/active", async (c) => {
-  try {
-    const releaseHistory = await getReleaseHistory(c);
-    const activeRelease = await releaseHistory.getActiveRelease();
-
-    if (!activeRelease) {
-      return c.json({ message: "No active release found", ok: false }, 404);
+api.post("/release/active/get",
+  validator("json", (value, c) => {
+    const body = value as { accountId: string; workerName: string; apiToken: string };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
+      return c.json(
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
     }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const { accountId, workerName, apiToken } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const activeRelease = await releaseHistory.getActiveRelease();
 
-    const requestBody = await c.req.json();
-    const { command, account_id, api_token } = requestBody;
+      // Always return 200 OK - null when no active release, release object when active
+      return c.json(activeRelease ?? null, 200);
+    } catch (error) {
+      console.error("Error getting active release:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
+    }
+  }
+);
+
+api.post("/release/active",
+  validator("json", (value, c) => {
+    const body = value as {
+      accountId: string;
+      workerName: string;
+      apiToken: string;
+      command: string;
+      account_id?: string;
+      api_token?: string;
+    };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
+      return c.json(
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
+    }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const { accountId, workerName, apiToken, command, account_id, api_token } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const activeRelease = await releaseHistory.getActiveRelease();
+
+      if (!activeRelease) {
+        return c.json({ message: "No active release found", ok: false }, 404);
+      }
 
     if (!command || (command !== "start" && command !== "stop")) {
       return c.json(
@@ -337,24 +443,40 @@ api.post("/release/active", async (c) => {
   }
 });
 
-api.delete("/release/active", async (c) => {
-  try {
-    const releaseHistory = await getReleaseHistory(c);
-    const activeRelease = await releaseHistory.getActiveRelease();
-
-    if (!activeRelease) {
-      return c.json({ message: "No active release found", ok: false }, 404);
-    }
-
-    if (activeRelease.state !== "not_started") {
+api.delete("/release/active",
+  validator("json", (value, c) => {
+    const body = value as { accountId: string; workerName: string; apiToken: string };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
       return c.json(
         {
-          message: 'Release has to be in a "not_started" state',
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
           ok: false,
         },
-        409,
+        400,
       );
     }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const { accountId, workerName, apiToken } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const activeRelease = await releaseHistory.getActiveRelease();
+
+      if (!activeRelease) {
+        return c.json({ message: "No active release found", ok: false }, 404);
+      }
+
+      if (activeRelease.state !== "not_started") {
+        return c.json(
+          {
+            message: 'Release has to be in a "not_started" state',
+            ok: false,
+          },
+          409,
+        );
+      }
 
     const deleted = await releaseHistory.removeRelease(activeRelease.id);
     if (!deleted) {
@@ -368,26 +490,43 @@ api.delete("/release/active", async (c) => {
   }
 });
 
-api.get("/release/:releaseId", async (c) => {
-  try {
-    const releaseId = c.req.param("releaseId");
-    if (!isValidId(releaseId)) {
-      return c.json({ message: "Release not found", ok: false }, 404);
+api.post("/release/:releaseId",
+  validator("json", (value, c) => {
+    const body = value as { accountId: string; workerName: string; apiToken: string };
+    if (!body.accountId || !body.workerName || !body.apiToken) {
+      return c.json(
+        {
+          message: "Missing required connection fields: accountId, workerName, and apiToken are required",
+          ok: false,
+        },
+        400,
+      );
     }
+    return body;
+  }),
+  async (c) => {
+    try {
+      const releaseId = c.req.param("releaseId");
+      if (!isValidId(releaseId)) {
+        return c.json({ message: "Release not found", ok: false }, 404);
+      }
 
-    const releaseHistory = await getReleaseHistory(c);
-    const release = await releaseHistory.getRelease(releaseId);
+      const { accountId, workerName, apiToken } = c.req.valid("json");
+      const hashedApiToken = await hashApiToken(apiToken);
+      const releaseHistory = await getReleaseHistory(c, accountId, workerName, hashedApiToken);
+      const release = await releaseHistory.getRelease(releaseId);
 
-    if (!release) {
-      return c.json({ message: "Release not found", ok: false }, 404);
+      if (!release) {
+        return c.json({ message: "Release not found", ok: false }, 404);
+      }
+
+      return c.json(release, 200);
+    } catch (error) {
+      console.error("Error getting release:", error);
+      return c.json({ message: "Internal Server Error", ok: false }, 500);
     }
-
-    return c.json(release, 200);
-  } catch (error) {
-    console.error("Error getting release:", error);
-    return c.json({ message: "Internal Server Error", ok: false }, 500);
   }
-});
+);
 
 api.get("/stage/:stageId", async (c) => {
   try {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { AppTabs } from "./AppTabs";
 import { ReleasePlanTable } from "./ReleasePlanTable";
 import { WorkerInfo } from "./WorkerInfo";
-import { api } from "./utils";
+import { api, getConnectionIdentifier } from "./utils";
 import type { components } from "../../types/api";
 
 type Plan = components["schemas"]["Plan"];
@@ -171,30 +170,80 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Fetch initial plan from API
+  // Track current connection identifier to detect changes (uses hashed token for security)
+  const [currentConnectionId, setCurrentConnectionId] = useState<string | null>(null);
+
+  // Fetch plan from API when connection changes
   useEffect(() => {
     const fetchPlan = async () => {
-      try {
-        setLoading(true);
+      const connectionId = getConnectionIdentifier();
+      
+      // If connection changed, clear previous data first
+      if (currentConnectionId !== connectionId) {
+        setCurrentConnectionId(connectionId);
+        
+        // Clear any existing plan data when connection changes
+        setPlan({
+          stages: [],
+          slos: [],
+          polling_fraction: 0.1,
+          worker_name: ""
+        });
         setError(null);
-
-        const planData: Plan = await api.getPlan();
-        setPlan(planData);
-      } catch (err) {
-        console.error("Error fetching plan:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to fetch plan";
-        setError(errorMessage);
-        if (onError) {
-          onError(errorMessage);
+        
+        // If no connection exists, stay in cleared state
+        if (!connectionId) {
+          setLoading(false);
+          return;
         }
-      } finally {
+      } else if (!connectionId) {
+        // No connection and no change - stay in cleared state
         setLoading(false);
+        return;
+      }
+
+      // Only fetch if we have a connection
+      if (connectionId) {
+        try {
+          setLoading(true);
+          setError(null);
+
+          const planData: Plan = await api.getPlan();
+          setPlan(planData);
+        } catch (err) {
+          console.error("Error fetching plan:", err);
+          const errorMessage =
+            err instanceof Error ? err.message : "Failed to fetch plan";
+          setError(errorMessage);
+          if (onError) {
+            onError(errorMessage);
+          }
+        } finally {
+          setLoading(false);
+        }
       }
     };
 
     fetchPlan();
-  }, [onError]);
+  }, [onError, currentConnectionId]);
+
+  // Watch for connection changes in sessionStorage
+  useEffect(() => {
+    const checkConnectionChange = () => {
+      const connectionId = getConnectionIdentifier();
+      if (currentConnectionId !== connectionId) {
+        setCurrentConnectionId(connectionId);
+      }
+    };
+
+    // Check for connection changes periodically
+    const interval = setInterval(checkConnectionChange, 1000);
+    
+    // Also check immediately
+    checkConnectionChange();
+
+    return () => clearInterval(interval);
+  }, [currentConnectionId]);
 
   const handleSave = async (updatedPlan: Plan) => {
     try {
@@ -275,10 +324,6 @@ export const Plan: React.FC<PlanProps> = ({ onError }) => {
   }
 
   return (
-    <AppTabs
-      planEditor={
-        <PlanEditor plan={plan} onSave={handleSave} saveSuccess={saveSuccess} />
-      }
-    />
+    <PlanEditor plan={plan} onSave={handleSave} saveSuccess={saveSuccess} />
   );
 };

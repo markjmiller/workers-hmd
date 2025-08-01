@@ -7,6 +7,7 @@ import {
   api,
   isReleaseComplete,
   getShortVersionId,
+  getConnectionIdentifier,
 } from "./utils";
 import "./History.css";
 
@@ -34,6 +35,19 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
   >({});
 
   useEffect(() => {
+    // Check if worker connection exists before making API calls
+    const connectionId = getConnectionIdentifier();
+    if (!connectionId) {
+      // No connection exists - reset to default state and don't make API calls
+      setLoading(false);
+      setReleases([]);
+      setCurrentPage(0);
+      setHasMoreResults(false);
+      setReleaseStages({});
+      return;
+    }
+
+    // Connection exists - proceed with fetching release history
     fetchReleaseHistory(true);
   }, []);
 
@@ -80,7 +94,7 @@ export const History: React.FC<HistoryProps> = ({ onError }) => {
         queryParams.set("until", endOfDay.toISOString());
       }
 
-      const releaseHistory = await api.getReleaseHistory(queryParams);
+      const releaseHistory = await api.getReleaseHistory(Object.fromEntries(queryParams));
       // Filter out active releases to show only completed releases
       const completedReleases = releaseHistory.filter((release: Release) =>
         isReleaseComplete(release.state),

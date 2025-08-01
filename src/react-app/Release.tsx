@@ -7,6 +7,7 @@ import {
   api,
   isReleaseComplete,
   getShortVersionId,
+  getConnectionIdentifier,
 } from "./utils";
 import "./Release.css";
 
@@ -53,29 +54,43 @@ export const Release: React.FC<ReleaseProps> = ({
   // Check for active release on component mount and ensure polling starts
   useEffect(() => {
     const initializeRelease = async () => {
+      // Check if worker connection exists before making API calls
+      const connectionId = getConnectionIdentifier();
+      if (!connectionId) {
+        // No connection exists - reset to default state and don't make API calls
+        setLoading(false);
+        setActiveRelease(null);
+        setReleaseStages([]);
+        setWorkerInfo(null);
+        setWorkerVersions([]);
+        setConnectionVerified(false);
+        return;
+      }
+
+      // Connection exists - proceed with initialization
       await checkActiveRelease();
       // If there's an active release after checking, ensure polling is running
       // This helps with cases where the component remounts after tab switching
+
+      // Load worker info from session storage using secure connection data
+      const savedConnection = sessionStorage.getItem("workerConnection");
+      if (savedConnection) {
+        try {
+          const connection = JSON.parse(savedConnection);
+          setWorkerInfo({
+            name: connection.workerName,
+            accountId: connection.accountId,
+          });
+          // Fetch worker versions and deployment info after setting worker info
+          fetchWorkerVersions(connection.workerName, connection.accountId);
+          fetchActiveDeployment(connection.workerName, connection.accountId);
+        } catch (error) {
+          console.error("Error parsing worker connection:", error);
+        }
+      }
     };
 
     initializeRelease();
-
-    // Load worker info from session storage
-    const savedConnection = sessionStorage.getItem("workerConnection");
-    if (savedConnection) {
-      try {
-        const connection = JSON.parse(savedConnection);
-        setWorkerInfo({
-          name: connection.workerName,
-          accountId: connection.accountId,
-        });
-        // Fetch worker versions and deployment info after setting worker info
-        fetchWorkerVersions(connection.workerName, connection.accountId);
-        fetchActiveDeployment(connection.workerName, connection.accountId);
-      } catch (error) {
-        console.error("Error parsing worker connection:", error);
-      }
-    }
   }, []);
 
   // Keep activeReleaseRef in sync with activeRelease state

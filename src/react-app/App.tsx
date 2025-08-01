@@ -4,6 +4,7 @@ import { useState } from "react";
 import "./App.css";
 import "./ReleasePlanTable.css";
 import { Plan } from "./Plan";
+import { AppTabs } from "./AppTabs";
 import { Instructions } from "./Instructions";
 
 function App() {
@@ -87,7 +88,7 @@ function App() {
         {!globalError && (
           <>
             <Instructions />
-            <Plan onError={handleGlobalError} />
+            <AppTabs planEditor={<Plan onError={handleGlobalError} />} />
           </>
         )}
       </main>

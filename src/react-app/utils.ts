@@ -1,6 +1,19 @@
 // Shared utility functions for React app
 
 /**
+ * Hash API token for secure change detection (frontend version)
+ * Uses the same algorithm as the backend for consistency
+ */
+export const hashApiToken = async (apiToken: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(apiToken);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex.slice(0, 8);
+};
+
+/**
  * Display short version of UUID for better readability
  * Extracts first section before the first dash
  */
@@ -61,6 +74,56 @@ export const formatStageState = (state: string): string => {
 };
 
 /**
+ * Get CloudflareConnection details from session storage
+ * Returns null if no connection exists (for graceful handling during app initialization)
+ * Note: Raw API token is retrieved separately from sessionStorage for security
+ */
+const getCloudflareConnection = (): { accountId: string; workerName: string; apiToken: string } | null => {
+  const workerConnectionData = sessionStorage.getItem("workerConnection");
+  const rawApiToken = sessionStorage.getItem("apiToken");
+  
+  if (!workerConnectionData || !rawApiToken) {
+    return null;
+  }
+  
+  try {
+    const connection = JSON.parse(workerConnectionData);
+    if (!connection.accountId || !connection.workerName || !connection.hashedApiToken) {
+      return null;
+    }
+    return {
+      accountId: connection.accountId,
+      workerName: connection.workerName,
+      apiToken: rawApiToken // Retrieve raw token only when needed
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+/**
+ * Get connection identifier for secure change detection
+ * Uses hashed token instead of raw token for security
+ */
+export const getConnectionIdentifier = (): string | null => {
+  const workerConnectionData = sessionStorage.getItem("workerConnection");
+  if (!workerConnectionData) {
+    return null;
+  }
+  
+  try {
+    const connection = JSON.parse(workerConnectionData);
+    if (!connection.accountId || !connection.workerName || !connection.hashedApiToken) {
+      return null;
+    }
+    // Return a unique identifier based on hashed data for change detection
+    return `${connection.accountId}-${connection.workerName}-${connection.hashedApiToken}`;
+  } catch (error) {
+    return null;
+  }
+};
+
+/**
  * Generic API fetch utility with error handling
  */
 export const apiRequest = async <T = any>(
@@ -92,49 +155,67 @@ export const apiRequest = async <T = any>(
  */
 export const api = {
   // Release endpoints
-  getActiveRelease: () => apiRequest("/api/release/active"),
-  createRelease: (data?: { old_version: string; new_version: string }) =>
-    apiRequest("/api/release", {
+  getActiveRelease: () => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      // Return null when no connection exists (graceful handling during app initialization)
+      return Promise.resolve(null);
+    }
+    return apiRequest("/api/release/active/get", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: data ? JSON.stringify(data) : undefined,
-    }),
+      body: JSON.stringify(connection)
+    });
+  },
+  createRelease: (data?: { old_version: string; new_version: string }) => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
+    return apiRequest("/api/release/create", {
+      method: "POST",
+      body: JSON.stringify({ ...connection, ...data })
+    });
+  },
   startRelease: () => {
-    const workerConnectionData = sessionStorage.getItem("workerConnection");
-    const connection = workerConnectionData
-      ? JSON.parse(workerConnectionData)
-      : {};
-
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
     return apiRequest("/api/release/active", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        command: "start",
-        account_id: connection.accountId || "",
-        api_token: connection.apiToken || "",
-      }),
+      body: JSON.stringify({ ...connection, command: "start" })
     });
   },
   stopRelease: () => {
-    const workerConnectionData = sessionStorage.getItem("workerConnection");
-    const connection = workerConnectionData
-      ? JSON.parse(workerConnectionData)
-      : {};
-
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
     return apiRequest("/api/release/active", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        command: "stop",
-        account_id: connection.accountId || "",
-        api_token: "",
-      }),
+      body: JSON.stringify({ ...connection, command: "stop" })
     });
   },
-  deleteActiveRelease: () =>
-    apiRequest("/api/release/active", { method: "DELETE" }),
-  getReleaseHistory: (params: URLSearchParams) =>
-    apiRequest(`/api/release?${params}`),
+  deleteActiveRelease: () => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
+    return apiRequest("/api/release/active", {
+      method: "DELETE",
+      body: JSON.stringify(connection)
+    });
+  },
+  getReleaseHistory: (params: { limit?: number; offset?: number; since?: string; until?: string; state?: string } = {}) => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
+    return apiRequest("/api/release", {
+      method: "POST",
+      body: JSON.stringify({ connection, ...params })
+    });
+  },
 
   // Stage endpoints
   getStage: (stageId: string) => apiRequest(`/api/stage/${stageId}`),
@@ -146,12 +227,26 @@ export const api = {
     }),
 
   // Plan endpoints
-  getPlan: () => apiRequest("/api/plan"),
-  updatePlan: (plan: any) =>
-    apiRequest("/api/plan", {
+  getPlan: () => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
+    return apiRequest("/api/plan", {
       method: "POST",
-      body: JSON.stringify(plan),
-    }),
+      body: JSON.stringify(connection)
+    });
+  },
+  updatePlan: (plan: any) => {
+    const connection = getCloudflareConnection();
+    if (!connection) {
+      return Promise.reject(new Error("No worker connection found. Please connect to a worker first."));
+    }
+    return apiRequest("/api/plan", {
+      method: "PUT",
+      body: JSON.stringify({ connection, plan })
+    });
+  }
 };
 
 /**
